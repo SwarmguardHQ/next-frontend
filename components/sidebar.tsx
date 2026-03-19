@@ -2,13 +2,13 @@
 
 import {
   Home,
-  LineChart,
+  BarChart3,
   Map,
-  Package,
-  Package2,
+  Layers,
+  Shield,
   Settings,
-  ShoppingCart,
-  Users2,
+  Target,
+  Cpu,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -25,12 +25,12 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   const navItems = [
-    { href: "/dashboard", icon: Home, label: "Dashboard" },
-    { href: "/dashboard/map", icon: Map, label: "Live Map" },
-    { href: "/dashboard/missions", icon: ShoppingCart, label: "Missions" },
-    { href: "#", icon: Package, label: "Scenarios" },
-    { href: "#", icon: Users2, label: "Drones" },
-    { href: "#", icon: LineChart, label: "Analytics" },
+    { href: "/", icon: Home, label: "Dashboard" },
+    { href: "/map", icon: Map, label: "Live Map" },
+    { href: "/missions", icon: Target, label: "Missions" },
+    { href: "#", icon: Layers, label: "Scenarios" },
+    { href: "#", icon: Cpu, label: "Drones" },
+    { href: "#", icon: BarChart3, label: "Analytics" },
   ];
 
   return (
@@ -41,7 +41,7 @@ export default function Sidebar() {
             href="#"
             className="group flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:h-8 md:w-8 md:text-base mb-4"
           >
-            <Package2 className="h-4 w-4 transition-all group-hover:scale-110" />
+            <Shield className="h-4 w-4 transition-all group-hover:scale-110" />
             <span className="sr-only">SwarmguardHQ</span>
           </Link>
 

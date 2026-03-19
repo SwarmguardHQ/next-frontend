@@ -31,7 +31,7 @@ export default function Header() {
   const navItems = [
     { href: "/dashboard", icon: Home, label: "Dashboard" },
     { href: "/dashboard/map", icon: Map, label: "Live Map" },
-    { href: "/dashboard/missions", icon: ShoppingCart, label: "Missions" },
+    { href: "/missions", icon: ShoppingCart, label: "Missions" },
     { href: "#", icon: Package, label: "Scenarios" },
     { href: "#", icon: Users2, label: "Drones" },
     { href: "#", icon: LineChart, label: "Analytics" },

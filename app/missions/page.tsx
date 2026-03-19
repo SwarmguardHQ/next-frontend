@@ -169,7 +169,7 @@ export default function MissionsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <Button variant="default" size="sm" asChild>
-                          <a href={`/dashboard/missions/${mission.mission_id}`}>
+                          <a href={`/missions/${mission.mission_id}`}>
                             <Terminal className="mr-2 h-4 w-4" />
                             View Logs
                           </a>
