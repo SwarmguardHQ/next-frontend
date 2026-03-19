@@ -29,7 +29,7 @@ export default function Sidebar() {
     { href: "/map", icon: Map, label: "Live Map" },
     { href: "/missions", icon: Target, label: "Missions" },
     { href: "#", icon: Layers, label: "Scenarios" },
-    { href: "#", icon: Cpu, label: "Drones" },
+    { href: "/drones", icon: Cpu, label: "Drones" },
     { href: "#", icon: BarChart3, label: "Analytics" },
   ];
 
