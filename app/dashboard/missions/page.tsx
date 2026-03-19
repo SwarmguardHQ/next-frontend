@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import type { MissionsListResponse, ScenariosListResponse, MissionListItem, Scenario } from "@/types/api_types";
-import { AlertCircle, CheckCircle2, Clock, Play, AlertOctagon } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Play, AlertOctagon, Terminal } from "lucide-react";
 
 export default function MissionsPage() {
   const [missionsData, setMissionsData] = useState<MissionsListResponse | null>(null);
@@ -168,8 +168,11 @@ export default function MissionsPage() {
                         {new Date(mission.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" asChild>
-                          <a href={`/dashboard/missions/${mission.mission_id}`}>View Logs</a>
+                        <Button variant="default" size="sm" asChild>
+                          <a href={`/dashboard/missions/${mission.mission_id}`}>
+                            <Terminal className="mr-2 h-4 w-4" />
+                            View Logs
+                          </a>
                         </Button>
                       </TableCell>
                     </TableRow>
