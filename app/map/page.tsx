@@ -1,13 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import {
+  Activity,
+  BatteryCharging,
+  HeartPulse,
+  Map as MapIcon,
+  Package,
+  Radar,
+  Triangle,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { Drone, Survivor } from "@/types/api_types";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Map, Plane, HeartPulse, BatteryCharging, Package, Activity, Navigation, Triangle } from "lucide-react";
+
+const SimulationMap3D = dynamic(
+  () => import("@/components/map/SimulationMap3D"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full min-h-[520px] items-center justify-center rounded-md bg-[#0d1117]">
+        <span className="animate-pulse font-mono text-xs tracking-widest text-slate-500 uppercase">
+          Loading 3D Engine…
+        </span>
+      </div>
+    ),
+  },
+);
 
 const GRID_SIZE = 20;
+const POLL_MS = 1800;
+const FAILURE_THRESHOLD = 3;
 
 const CHARGING_STATIONS = [
   { id: "CS1", x: 0, y: 0 },
@@ -19,206 +46,431 @@ const SUPPLY_DEPOTS = [
   { id: "D2", x: 19, y: 19 },
 ];
 
+type LiveMode = "live" | "demo";
+type ViewMode = "2d" | "3d";
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function safeDrones(input: Drone[]): Drone[] {
+  return input.map((d) => ({
+    ...d,
+    battery: clamp(Number(d.battery), 0, 100),
+    position: {
+      x: Math.round(clamp(Number(d.position?.x), 0, GRID_SIZE - 1)),
+      y: Math.round(clamp(Number(d.position?.y), 0, GRID_SIZE - 1)),
+    },
+  }));
+}
+
+function safeSurvivors(input: Survivor[]): Survivor[] {
+  return input.map((s) => ({
+    ...s,
+    position: {
+      x: Math.round(clamp(Number(s.position?.x), 0, GRID_SIZE - 1)),
+      y: Math.round(clamp(Number(s.position?.y), 0, GRID_SIZE - 1)),
+    },
+  }));
+}
+
+function createDemoState() {
+  const drones: Drone[] = [
+    {
+      drone_id: "drone_1",
+      position: { x: 10, y: 4 },
+      battery: 87,
+      status: "scanning",
+      payload: null,
+      assigned_sector: "C",
+      last_seen: new Date().toISOString(),
+    },
+    {
+      drone_id: "drone_2",
+      position: { x: 2, y: 18 },
+      battery: 38,
+      status: "flying",
+      payload: null,
+      assigned_sector: "SW",
+      last_seen: new Date().toISOString(),
+    },
+    {
+      drone_id: "drone_3",
+      position: { x: 0, y: 0 },
+      battery: 18,
+      status: "charging",
+      payload: null,
+      assigned_sector: null,
+      last_seen: new Date().toISOString(),
+    },
+    {
+      drone_id: "drone_4",
+      position: { x: 18, y: 3 },
+      battery: 92,
+      status: "flying",
+      payload: null,
+      assigned_sector: "NE",
+      last_seen: new Date().toISOString(),
+    },
+    {
+      drone_id: "drone_5",
+      position: { x: 11, y: 9 },
+      battery: 61,
+      status: "scanning",
+      payload: null,
+      assigned_sector: "SE",
+      last_seen: new Date().toISOString(),
+    },
+  ];
+
+  const survivors: Survivor[] = [
+    {
+      survivor_id: "s_1",
+      position: { x: 3, y: 3 },
+      condition: "critical",
+      detected: true,
+      rescued: false,
+      supplies_received: [],
+    },
+    {
+      survivor_id: "s_2",
+      position: { x: 14, y: 12 },
+      condition: "moderate",
+      detected: false,
+      rescued: false,
+      supplies_received: [],
+    },
+  ];
+
+  return { drones, survivors };
+}
+
+function moveDemoDrones(previous: Drone[]): Drone[] {
+  const dirs = [
+    { x: 0, y: 1 },
+    { x: 1, y: 0 },
+    { x: 0, y: -1 },
+    { x: -1, y: 0 },
+  ];
+
+  return previous.map((drone, idx) => {
+    if (drone.status === "offline" || drone.status === "charging") return drone;
+    const dir = dirs[(idx + Math.floor(Date.now() / POLL_MS)) % dirs.length];
+    const nx = clamp(drone.position.x + dir.x, 0, GRID_SIZE - 1);
+    const ny = clamp(drone.position.y + dir.y, 0, GRID_SIZE - 1);
+    const nextBattery = clamp(drone.battery - (drone.status === "scanning" ? 1.2 : 0.7), 8, 100);
+    return {
+      ...drone,
+      position: { x: nx, y: ny },
+      battery: Number(nextBattery.toFixed(1)),
+      status: nextBattery <= 20 ? "returning" : drone.status,
+      last_seen: new Date().toISOString(),
+    };
+  });
+}
+
+function droneColor(status: string): string {
+  if (status === "charging") return "text-emerald-400";
+  if (status === "offline") return "text-red-500";
+  if (status === "returning") return "text-amber-400";
+  if (status === "scanning" || status === "flying") return "text-sky-400";
+  return "text-slate-400";
+}
+
+function survivorColor(s: Survivor): string {
+  if (s.rescued) return "text-sky-300";
+  if (s.condition === "critical") return "text-red-400";
+  if (s.condition === "moderate") return "text-amber-400";
+  if (s.condition === "stable") return "text-emerald-400";
+  return "text-slate-400";
+}
+
 export default function SimulationMapPage() {
-  const [drones, setDrones] = useState<Drone[]>([]);
-  const [survivors, setSurvivors] = useState<Survivor[]>([]);
-  
+  const [{ drones, survivors }, setState] = useState(() => createDemoState());
+  const [mode, setMode] = useState<LiveMode>("live");
+  const [viewMode, setViewMode] = useState<ViewMode>("2d");
+  const [failCount, setFailCount] = useState(0);
+  const [pulse, setPulse] = useState(0);
+
   useEffect(() => {
-    const fetchData = async () => {
+    const tick = window.setInterval(() => {
+      setPulse((n) => (n + 1) % 2);
+    }, 900);
+    return () => window.clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const poll = async () => {
       try {
-        const [dRes, sRes] = await Promise.all([
-          api.world.getDrones(),
-          api.world.getSurvivors(),
-        ]);
-        setDrones(dRes.drones);
-        // Only show detected survivors to be realistic, or show all for debug?
-        // Let's show all but style undetected differently.
-        setSurvivors(sRes.survivors);
-      } catch (err) {
-        console.error("Failed to fetch world state", err);
+        const [dRes, sRes] = await Promise.all([api.world.getDrones(), api.world.getSurvivors()]);
+        if (!mounted) return;
+        setState({
+          drones: safeDrones(dRes.drones ?? []),
+          survivors: safeSurvivors(sRes.survivors ?? []),
+        });
+        setMode("live");
+        setFailCount(0);
+      } catch {
+        if (!mounted) return;
+        setFailCount((prev) => {
+          const next = prev + 1;
+          if (next >= FAILURE_THRESHOLD) {
+            setMode("demo");
+            setState((prevState) => ({
+              ...prevState,
+              drones: moveDemoDrones(prevState.drones),
+            }));
+          }
+          return next;
+        });
       }
     };
 
-    fetchData();
-    const interval = setInterval(fetchData, 2000);
-    return () => clearInterval(interval);
+    poll();
+    const interval = window.setInterval(poll, POLL_MS);
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
   }, []);
 
-  const cells = [];
-  for (let y = GRID_SIZE - 1; y >= 0; y--) {
-    for (let x = 0; x < GRID_SIZE; x++) {
-      cells.push({ x, y });
+  const cells = useMemo(() => {
+    const list: { x: number; y: number }[] = [];
+    for (let y = GRID_SIZE - 1; y >= 0; y -= 1) {
+      for (let x = 0; x < GRID_SIZE; x += 1) list.push({ x, y });
     }
-  }
+    return list;
+  }, []);
 
-  const getDroneColor = (status: string) => {
-    switch(status) {
-      case 'idle': return 'text-slate-400';
-      case 'flying': case 'scanning': return 'text-blue-500';
-      case 'returning': return 'text-orange-400';
-      case 'charging': return 'text-green-400';
-      case 'offline': return 'text-red-600';
-      default: return 'text-blue-400';
+  const dronesByCell = useMemo(() => {
+    const map = new Map<string, Drone[]>();
+    for (const drone of drones) {
+      const key = `${drone.position.x}-${drone.position.y}`;
+      map.set(key, [...(map.get(key) ?? []), drone]);
     }
-  };
+    return map;
+  }, [drones]);
 
-  const getSurvivorColor = (s: Survivor) => {
-    if (s.rescued) return "text-blue-400";
-    switch (s.condition) {
-      case "critical": return "text-red-500";
-      case "moderate": return "text-yellow-500";
-      case "stable": return "text-emerald-500";
-      default: return "text-slate-400";
+  const survivorsByCell = useMemo(() => {
+    const map = new Map<string, Survivor[]>();
+    for (const survivor of survivors) {
+      const key = `${survivor.position.x}-${survivor.position.y}`;
+      map.set(key, [...(map.get(key) ?? []), survivor]);
     }
-  };
+    return map;
+  }, [survivors]);
+
+  const activeDrones = drones.filter((d) => !["offline", "idle"].includes(d.status)).length;
+  const lowBatteryDrones = drones.filter((d) => d.battery <= 20).length;
+  const detectedSurvivors = survivors.filter((s) => s.detected).length;
+  const rescuedSurvivors = survivors.filter((s) => s.rescued).length;
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Map className="h-8 w-8 text-primary" />
+    <div className="flex-1 space-y-4 rounded-lg bg-[#0d1117] p-4 text-white sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-wide text-white sm:text-3xl">
+          <MapIcon className="h-7 w-7 text-sky-400" />
           Live Simulation Map
         </h2>
+        <div className="flex items-center gap-2">
+          <div className="mr-1 inline-flex rounded-md border border-slate-600/70 bg-slate-900/70 p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("2d")}
+              className={`rounded px-2 py-1 text-xs font-semibold tracking-wide ${
+                viewMode === "2d"
+                  ? "bg-sky-500/20 text-sky-200"
+                  : "text-slate-300 hover:bg-slate-800"
+              }`}
+            >
+              2D
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("3d")}
+              className={`rounded px-2 py-1 text-xs font-semibold tracking-wide ${
+                viewMode === "3d"
+                  ? "bg-sky-500/20 text-sky-200"
+                  : "text-slate-300 hover:bg-slate-800"
+              }`}
+            >
+              3D
+            </button>
+          </div>
+          <Badge className="border border-emerald-400/40 bg-emerald-500/10 text-emerald-300">
+            <Radar className="h-3 w-3" />
+            {viewMode === "2d" ? "SECTOR GRID 20×20" : "MAPBOX SAT · DECK.GL"}
+          </Badge>
+          {mode === "live" ? (
+            <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
+              <Wifi className="h-3 w-3" />
+              LIVE STREAM
+            </Badge>
+          ) : (
+            <Badge className="border border-amber-400/40 bg-amber-500/10 text-amber-300">
+              <WifiOff className="h-3 w-3" />
+              DEMO MODE
+            </Badge>
+          )}
+        </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-5 xl:grid-cols-6">
-        {/* Left Side: The Map */}
-        <Card className="md:col-span-4 xl:col-span-5 bg-slate-950 border-slate-800">
-          <CardHeader>
-            <CardTitle className="text-slate-200">Sector Grid (20x20)</CardTitle>
-            <CardDescription className="text-slate-400">Real-time drone telemetry and survivor locations.</CardDescription>
+      <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-6">
+        <Card className="border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.18)] md:col-span-3 xl:col-span-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base tracking-wide text-white">Sector Occupancy Grid</CardTitle>
+            <CardDescription className="text-slate-300">Autonomous drone and survivor telemetry overlay</CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center p-2 lg:p-6 overflow-x-auto">
-            <div 
-              className="grid gap-[1px] bg-slate-800 p-[1px] rounded-lg shadow-2xl" 
-              style={{
-                gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
-                width: '100%', minWidth: '600px',
-                maxWidth: '1000px',
-                aspectRatio: '1/1'
-              }}
-            >
-              {cells.map((cell) => {
-                const cellDrones = drones.filter(d => d.position.x === cell.x && d.position.y === cell.y);
-                const cellSurvivors = survivors.filter(s => s.position.x === cell.x && s.position.y === cell.y);
-                const isCS = CHARGING_STATIONS.some(cs => cs.x === cell.x && cs.y === cell.y);
-                const isDepot = SUPPLY_DEPOTS.some(d => d.x === cell.x && d.y === cell.y);
+          <CardContent className={viewMode === "2d" ? "overflow-x-auto p-2 sm:p-4" : "p-0"}>
+            {viewMode === "2d" ? (
+              <div
+                className="grid gap-px rounded-md bg-slate-800/80 p-px"
+                style={{
+                  gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
+                  width: "100%",
+                  minWidth: "620px",
+                  maxWidth: "980px",
+                  aspectRatio: "1 / 1",
+                }}
+              >
+                {cells.map((cell) => {
+                  const key = `${cell.x}-${cell.y}`;
+                  const cellDrones = dronesByCell.get(key) ?? [];
+                  const cellSurvivors = survivorsByCell.get(key) ?? [];
+                  const isCS = CHARGING_STATIONS.some((cs) => cs.x === cell.x && cs.y === cell.y);
+                  const isDepot = SUPPLY_DEPOTS.some((d) => d.x === cell.x && d.y === cell.y);
 
-                return (
-                  <div 
-                    key={`${cell.x}-${cell.y}`} 
-                    className="bg-slate-900 relative rounded-sm flex items-center justify-center hover:bg-slate-800 transition-colors group aspect-square"
-                  >
-                    {/* Background indicators for infrastructure */}
-                    {isCS && <BatteryCharging className="absolute top-1 left-1 h-3 w-3 text-emerald-900 opacity-50" />}
-                    {isDepot && <Package className="absolute bottom-1 right-1 h-3 w-3 text-blue-900 opacity-50" />}
+                  return (
+                    <div
+                      key={key}
+                      className="group relative flex aspect-square items-center justify-center bg-slate-900 transition-colors hover:bg-slate-800"
+                    >
+                      {isCS && (
+                        <BatteryCharging className="absolute left-1 top-1 h-3 w-3 text-emerald-800/80" />
+                      )}
+                      {isDepot && (
+                        <Package className="absolute bottom-1 right-1 h-3 w-3 text-sky-800/80" />
+                      )}
 
-                    {/* Cell coordinates tooltip on hover */}
-                    <div className="absolute opacity-0 group-hover:opacity-100 z-10 bottom-full mb-2 bg-slate-800 text-xs text-white p-2 rounded pointer-events-none whitespace-nowrap shadow-xl">
-                      Coord: ({cell.x}, {cell.y})
-                      {isCS && <div>Charging Station</div>}
-                      {isDepot && <div>Supply Depot</div>}
-                    </div>
+                      {(cellSurvivors.length > 0 || cellDrones.length > 0) && (
+                        <span className="absolute inset-0 rounded-[2px] ring-1 ring-sky-400/15" />
+                      )}
 
-                    <div className="flex flex-wrap items-center justify-center gap-1 p-1">
-                      {/* Render Survivors First */}
-                      {cellSurvivors.map(s => (
-                        <div key={s.survivor_id} className="relative group/surv" title={`Survivor ${s.survivor_id}`}>
-                          <HeartPulse 
-                            className={`h-5 w-5 ${getSurvivorColor(s)} ${!s.detected && !s.rescued ? 'opacity-40 border border-dashed border-slate-600 rounded-full' : ''}`} 
+                      <div className="absolute bottom-full left-1/2 z-20 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-800 px-2 py-1 text-[10px] text-slate-100 shadow-xl group-hover:block">
+                        ({cell.x}, {cell.y})
+                        {isCS ? " • Charge" : ""}
+                        {isDepot ? " • Depot" : ""}
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-center gap-1 p-1">
+                        {cellSurvivors.map((s) => (
+                          <HeartPulse
+                            key={s.survivor_id}
+                            className={`h-4 w-4 ${survivorColor(s)} ${
+                              !s.detected && !s.rescued ? "opacity-45" : pulse ? "opacity-100" : "opacity-70"
+                            }`}
                           />
-                        </div>
-                      ))}
+                        ))}
 
-                      {/* Render Drones */}
-                      {cellDrones.map(d => (
-                        <div key={d.drone_id} className="relative group/drone" title={`Drone ${d.drone_id}`}>
-                          <Triangle 
-                            fill="currentColor"
-                            className={`h-5 w-5 ${getDroneColor(d.status)} ${d.status === 'offline' ? 'rotate-180' : ''}`} 
-                          />
-                          <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[8px] font-bold text-slate-300">
-                            {d.drone_id.split('_')[1]?.[0] || d.drone_id}
+                        {cellDrones.map((d) => (
+                          <div key={d.drone_id} className="relative">
+                            <Triangle
+                              fill="currentColor"
+                              className={`h-4 w-4 ${droneColor(d.status)} ${
+                                d.status === "offline" ? "rotate-180" : ""
+                              }`}
+                            />
+                            <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[8px] font-semibold text-slate-300">
+                              {d.drone_id.replace("drone_", "D")}
+                            </span>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                    
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <SimulationMap3D drones={drones} survivors={survivors} pulse={pulse} />
+            )}
           </CardContent>
         </Card>
 
-        {/* Right Side: Legend & Info */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Activity className="h-5 w-5" />
-                Legend
-              </CardTitle>
+        <div className="space-y-4 md:col-span-1 xl:col-span-2">
+          <Card className="border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.18)]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base tracking-wide text-white">Mission Snapshot</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <div className="space-y-2">
-                <h4 className="font-semibold text-muted-foreground">Infrastructure</h4>
-                <div className="flex items-center gap-2">
-                  <BatteryCharging className="h-4 w-4 text-emerald-700" /> Charging Station
-                </div>
-                <div className="flex items-center gap-2">
-                  <Package className="h-4 w-4 text-blue-700" /> Supply Depot
-                </div>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300">Fleet Active</span>
+                <span className="tabular-nums text-emerald-300">{activeDrones}/{drones.length}</span>
               </div>
-              <div className="space-y-2">
-                <h4 className="font-semibold text-muted-foreground mt-4">Drones</h4>
-                <div className="flex items-center gap-2">
-                  <Triangle fill="currentColor" className="h-4 w-4 text-blue-500" /> Active Flight
-                </div>
-                <div className="flex items-center gap-2">
-                  <Triangle fill="currentColor" className="h-4 w-4 text-green-400" /> Charging
-                </div>
-                <div className="flex items-center gap-2">
-                  <Triangle fill="currentColor" className="h-4 w-4 text-red-600 rotate-180" /> Offline / Failure
-                </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300">Low Battery</span>
+                <span className="tabular-nums text-amber-300">{lowBatteryDrones}</span>
               </div>
-              <div className="space-y-2">
-                <h4 className="font-semibold text-muted-foreground mt-4">Survivors</h4>
-                <div className="flex items-center gap-2">
-                  <HeartPulse className="h-4 w-4 text-red-500" /> Critical Condition
-                </div>
-                <div className="flex items-center gap-2">
-                  <HeartPulse className="h-4 w-4 text-yellow-500" /> Moderate
-                </div>
-                <div className="flex items-center gap-2">
-                  <HeartPulse className="h-4 w-4 text-emerald-500" /> Stable
-                </div>
-                <div className="flex items-center gap-2">
-                  <HeartPulse className="h-4 w-4 text-blue-400" /> Rescued (Supplied)
-                </div>
-                <div className="flex items-center gap-2">
-                  <HeartPulse className="h-4 w-4 text-slate-400 opacity-40 border border-dashed border-slate-600 rounded-full" /> Undetected
-                </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300">Survivors Detected</span>
+                <span className="tabular-nums text-slate-100">{detectedSurvivors}/{survivors.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300">Survivors Rescued</span>
+                <span className="tabular-nums text-sky-300">{rescuedSurvivors}</span>
+              </div>
+              <div className="mt-2 rounded-md border border-slate-700/80 bg-slate-900/40 p-2 text-xs text-slate-300">
+                {mode === "live"
+                  ? "Operational uplink stable. Polling every 1.8s."
+                  : `Link degraded. Demo fallback active after ${failCount} failed fetch attempts.`}
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.18)]">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Swarm Summary</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base tracking-wide text-white">
+                <Activity className="h-4 w-4 text-sky-300" />
+                Legend
+              </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm space-y-2">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Drones</span>
-                <span className="font-medium">{drones.length}</span>
+            <CardContent className="grid gap-2 text-xs text-slate-300">
+              <p className="font-semibold tracking-widest text-slate-400 uppercase">Infrastructure</p>
+              <div className="flex items-center gap-2">
+                <BatteryCharging className="h-4 w-4 text-emerald-500" /> Charging Station
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Active Drones</span>
-                <span className="font-medium text-green-500">{drones.filter(d => !['offline', 'idle'].includes(d.status)).length}</span>
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-sky-500" /> Supply Depot
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Survivors Detected</span>
-                <span className="font-medium">{survivors.filter(s => s.detected).length} / {survivors.length}</span>
+
+              <p className="mt-2 font-semibold tracking-widest text-slate-400 uppercase">Drone States</p>
+              <div className="flex items-center gap-2">
+                <Triangle fill="currentColor" className="h-4 w-4 text-sky-400" /> Flying / Scanning
+              </div>
+              <div className="flex items-center gap-2">
+                <Triangle fill="currentColor" className="h-4 w-4 text-amber-400" /> Returning
+              </div>
+              <div className="flex items-center gap-2">
+                <Triangle fill="currentColor" className="h-4 w-4 text-emerald-400" /> Charging
+              </div>
+              <div className="flex items-center gap-2">
+                <Triangle fill="currentColor" className="h-4 w-4 rotate-180 text-red-500" /> Offline
+              </div>
+
+              <p className="mt-2 font-semibold tracking-widest text-slate-400 uppercase">Survivors</p>
+              <div className="flex items-center gap-2">
+                <HeartPulse className="h-4 w-4 text-red-400" /> Critical
+              </div>
+              <div className="flex items-center gap-2">
+                <HeartPulse className="h-4 w-4 text-amber-400" /> Moderate
+              </div>
+              <div className="flex items-center gap-2">
+                <HeartPulse className="h-4 w-4 text-emerald-400" /> Stable
+              </div>
+              <div className="flex items-center gap-2">
+                <HeartPulse className="h-4 w-4 text-slate-400 opacity-45" /> Undetected
               </div>
             </CardContent>
           </Card>

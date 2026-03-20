@@ -15,7 +15,6 @@ import {
   LineChart,
   Map,
   Package,
-  Package2,
   PanelLeft,
   ShoppingCart,
   Users2,
@@ -24,6 +23,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 export default function Header() {
   const pathname = usePathname();
@@ -39,6 +39,15 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
+      <Button
+        size="icon"
+        variant="outline"
+        className="hidden border-border bg-card text-foreground hover:bg-accent sm:inline-flex"
+        onClick={() => window.dispatchEvent(new Event("toggle-sidebar"))}
+      >
+        <PanelLeft className="h-5 w-5" />
+        <span className="sr-only">Toggle Sidebar</span>
+      </Button>
       <Sheet>
         <SheetTrigger asChild>
           <Button size="icon" variant="outline" className="sm:hidden">
@@ -49,11 +58,17 @@ export default function Header() {
         <SheetContent side="left" className="sm:max-w-xs">
           <nav className="grid gap-6 text-lg font-medium">
             <Link
-              href="#"
-              className="group flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:text-base"
+              href="/"
+              className="flex items-center gap-2 rounded-md border border-sky-500/30 bg-slate-900/60 p-2"
             >
-              <Package2 className="h-5 w-5 transition-all group-hover:scale-110" />
-              <span className="sr-only">SwarmguardHQ</span>
+              <Image
+                src="/siren-logo-v2.png"
+                alt="SIREN"
+                width={28}
+                height={28}
+                className="rounded-sm"
+              />
+              <span className="text-xs font-semibold tracking-wider text-slate-100">SIREN</span>
             </Link>
 
             {navItems.map((item) => {
