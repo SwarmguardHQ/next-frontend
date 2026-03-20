@@ -60,68 +60,75 @@ export default function LiveMissionConsole() {
     return () => clearInterval(interval);
   }, [missionId]);
 
-// Establish mock stream for fake data
   useEffect(() => {
     if (!missionId) return;
 
+    // Use direct URL to bypass Next.js proxy buffering for SSE
+    const eventSource = new EventSource(`http://127.0.0.1:8000/mission/${missionId}/stream`);
     setStreamActive(true);
 
-    const addLog = (eventData: Partial<LogEvent>) => {
+    eventSource.onmessage = (event) => {
+      // Handle generic message if needed
+    };
+
+    const handleEvent = (type: LogEvent["type"], data: any) => {
       setLogs((prev) => [
         ...prev,
         {
           id: Date.now() + Math.random(),
           timestamp: new Date().toLocaleTimeString(),
-          type: "log",
-          ...eventData,
+          type,
+          ...data,
         } as LogEvent
       ]);
     };
 
-    let step = 0;
-    const mockSteps = [
-      { type: "log", message: "Initializing connection to drone network..." },
-      { type: "log", message: "Authenticating with Swarm Commander credentials..." },
-      { type: "step", data: { phase: "PLANNING", tool: "mission_planner", reasoning: "We need to distribute drones efficiently across the grid.", result_summary: "Calculated 4 optimal search zones." } },
-      { type: "log", message: "Assigning zones to drones D1, D2, D3, D4." },
-      { type: "step", data: { phase: "EXECUTION", tool: "movement_tools", reasoning: "Drones must navigate to their zones before scanning.", result_summary: "Movement commands issued successfully." } },
-      { type: "log", message: "D1 reached coordinates (4, 4)." },
-      { type: "log", message: "D2 reached coordinates (16, 4)." },
-      { type: "step", data: { phase: "SCANNING", tool: "scan_tools", reasoning: "Using thermal imaging to find survivors in assigned sectors.", result_summary: "Detected 2 heat signatures in Sector Alpha." } },
-      { type: "log", message: "Survivor localized at (5, 6). Condition: Stable." },
-      { type: "step", data: { phase: "RESCUE", tool: "rescue_tools", reasoning: "Survivor needs a medical supply drop.", result_summary: "Dispatched drone D1 with first aid payload." } },
-      { type: "log", message: "Payload delivered successfully." },
-      { type: "complete", data: { debrief: "Mission accomplished. All zones scanned and required payloads delivered." } }
-    ];
+    // Standard SSE event listeners
+    eventSource.addEventListener("log", (e) => {
+      const data = JSON.parse((e as MessageEvent).data);
+      handleEvent("log", data);
+    });
 
-    let timer: NodeJS.Timeout;
-    
-    const runStep = () => {
-      if (step >= mockSteps.length) return;
-      
-      const current = mockSteps[step];
-      if (current.type === "log") {
-        addLog({ type: "log", message: current.message as string });
-      } else if (current.type === "step") {
-        addLog({
-          type: "step",
-          ...current.data
-        });
-      } else if (current.type === "complete") {
-        addLog({ type: "complete", debrief: (current.data as any).debrief });
-        setStreamActive(false);
-      }
-      
-      step++;
-      if (step < mockSteps.length) {
-        timer = setTimeout(runStep, 1500 + Math.random() * 2000);
+    eventSource.addEventListener("step", (e) => {
+      const data = JSON.parse((e as MessageEvent).data);
+      handleEvent("step", data);
+    });
+
+    eventSource.addEventListener("error", (e) => {
+      const data = JSON.parse((e as MessageEvent).data);
+      handleEvent("error", data);
+      eventSource.close();
+      setStreamActive(false);
+    });
+
+    eventSource.addEventListener("complete", (e) => {
+      const data = JSON.parse((e as MessageEvent).data);
+      handleEvent("complete", data);
+      eventSource.close();
+      setStreamActive(false);
+    });
+
+    // Fallback for types that might not be mapped specifically
+    eventSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type && !["log", "step", "error", "complete"].includes(data.type)) {
+          handleEvent("log", { message: data.message || JSON.stringify(data) });
+        }
+      } catch (err) {
+        // Not JSON or missing type
       }
     };
 
-    timer = setTimeout(runStep, 1000);
+    eventSource.onerror = (err) => {
+      console.error("SSE Error:", err);
+      eventSource.close();
+      setStreamActive(false);
+    };
 
     return () => {
-      clearTimeout(timer);
+      eventSource.close();
+      setStreamActive(false);
     };
   }, [missionId]);
 
