@@ -46,7 +46,8 @@ export default function Sidebar() {
     { href: "/map", icon: Map, label: "Live Map" },
     { href: "/missions", icon: Target, label: "Missions" },
     // { href: "/drone-command", icon: Layers, label: "Human In Loop" },
-    { href: "/drones", icon: Cpu, label: "Drones" },
+    { href: "/fleet", icon: Cpu, label: "Drones" },
+    // { href: "/drones", icon: Cpu, label: "Drones" },
     { href: "/analytics", icon: BarChart3, label: "Analytics" },
   ];
 
