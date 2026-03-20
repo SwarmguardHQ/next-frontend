@@ -10,7 +10,13 @@ export async function GET() {
         status: "flying",
         payload: null,
         assigned_sector: null,
-        last_seen: new Date().toISOString()
+        last_seen: new Date().toISOString(),
+        sensors: [
+          { type: 'visual', status: 'active', value: 'Clear visibility' },
+          { type: 'thermal', status: 'active', value: 'Target 37.2°C detected' },
+          { type: 'lidar', status: 'not_installed', value: 'N/A' },
+          { type: 'audio', status: 'not_installed', value: 'N/A' }
+        ]
       },
       {
         drone_id: "D2",
@@ -19,7 +25,13 @@ export async function GET() {
         status: "scanning",
         payload: null,
         assigned_sector: null,
-        last_seen: new Date().toISOString()
+        last_seen: new Date().toISOString(),
+        sensors: [
+          { type: 'visual', status: 'offline', value: 'Standby' },
+          { type: 'thermal', status: 'not_installed', value: 'N/A' },
+          { type: 'lidar', status: 'active', value: 'Mapping grid +12m' },
+          { type: 'audio', status: 'damaged', value: 'Interference/Static' }
+        ]
       },
       {
         drone_id: "D3",
@@ -28,7 +40,13 @@ export async function GET() {
         status: "idle",
         payload: "medkit",
         assigned_sector: null,
-        last_seen: new Date().toISOString()
+        last_seen: new Date().toISOString(),
+        sensors: [
+          { type: 'visual', status: 'offline', value: 'Lens cap closed' },
+          { type: 'thermal', status: 'offline', value: 'Power deferred' },
+          { type: 'lidar', status: 'offline', value: 'Power deferred' },
+          { type: 'audio', status: 'offline', value: 'Muted' }
+        ]
       }
     ],
     summary: {

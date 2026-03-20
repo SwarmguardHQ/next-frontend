@@ -3,6 +3,12 @@ export interface Position {
   y: number;
 }
 
+export interface SensorData {
+  type: 'visual' | 'thermal' | 'lidar' | 'audio';
+  status: 'active' | 'damaged' | 'offline' | 'not_installed';
+  value: string | number;
+}
+
 export interface Drone {
   drone_id: string;
   position: Position;
@@ -11,6 +17,7 @@ export interface Drone {
   payload: string | null;
   assigned_sector: string | null;
   last_seen: string;
+  sensors?: SensorData[];
 }
 
 export interface Survivor {

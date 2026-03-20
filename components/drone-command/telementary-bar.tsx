@@ -6,7 +6,7 @@ import { Wifi } from "lucide-react";
 export function TelemetryBar({ telemetry }: { telemetry: TelemetryState }) {
   const items = [
     { label: "ALT", value: telemetry.altitude, unit: "m" },
-    { label: "SPD", value: telemetry.speed.toFixed(1), unit: "m/s" },
+    { label: "SPD", value: telemetry.speed.toFixed(1), unit: "km/h" },
     { label: "BAT", value: telemetry.battery, unit: "%", warn: telemetry.battery < 30 },
     { label: "LAT", value: telemetry.lat.toFixed(4), unit: "" },
     { label: "LNG", value: telemetry.lng.toFixed(4), unit: "" },

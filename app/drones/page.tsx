@@ -6,7 +6,7 @@ import { Drone } from "@/types/api_types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Cpu, Wifi, Battery, Activity, Eye, RadioReceiver, Fan } from "lucide-react";
+import { Cpu, Wifi, Battery, Activity, Eye, RadioReceiver, Fan, Radar } from "lucide-react";
 
 // Mock telemetry data generator for a single drone
 function generateTelemetry(baseAltitude: number) {
@@ -95,9 +95,9 @@ export default function DigitalTwinPage() {
               >
                 <div className="flex items-center w-full">
                   <span className="font-mono text-xs">{drone.drone_id}</span>
-                  <Badge 
-                    variant="outline" 
-                    className={`ml-auto text-[10px] ${
+                  <Badge
+                    variant="outline"
+                    className={`ml-auto mr-2 text-[10px] ${
                       drone.status === "offline" ? "border-red-500 text-red-500" :
                       drone.status === "charging" ? "border-green-500 text-green-500" :
                       "border-blue-500 text-blue-500"
@@ -105,6 +105,16 @@ export default function DigitalTwinPage() {
                   >
                     {drone.status.toUpperCase()}
                   </Badge>
+                  <div className="flex gap-1" title="Equipped Sensors">
+                    {drone.sensors?.map(s => {
+                      const Icon = s.type === 'visual' ? Eye : s.type === 'thermal' ? Activity : s.type === 'audio' ? RadioReceiver : Radar;
+                        return (
+                          <span key={s.type} title={s.type}>
+                            <Icon className={`h-3 w-3 ${s.status === 'active' ? 'text-green-400' : s.status === 'not_installed' ? 'text-slate-800' : 'text-red-500'}`} />
+                          </span>
+                        );
+                    })}
+                  </div>
                 </div>
               </Button>
             ))}
@@ -171,7 +181,7 @@ export default function DigitalTwinPage() {
                     <div>ALT: <span className="text-white">{telemetry.altitude}m</span></div>
                   </div>
                   <div className="absolute bottom-4 right-4 text-green-400 font-mono text-xs text-right z-20 bg-black/60 px-2 py-1 rounded backdrop-blur-md">
-                    <div>SPD: {telemetry.speed}m/s</div>
+                    <div>SPD: {telemetry.speed}km/h</div>
                     <div>BAT: {activeDrone?.battery}%</div>
                     <div>VSYNC: {telemetry.rpm1}</div>
                   </div>
@@ -186,34 +196,34 @@ export default function DigitalTwinPage() {
           </Card>
 
           {/* Bottom Panel: Hardware Diagnostics */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            
+          <div className="grid gap-4 md:grid-cols-2 pb-8">
+
             {/* Live Gyro / Motor Speeds */}
             <Card className="bg-slate-900 border-none text-slate-300">
               <CardHeader className="pb-2">
                 <CardTitle className="font-mono text-sm text-cyan-400">Rotor Telemetry</CardTitle>
               </CardHeader>
               <CardContent className="font-mono text-xs space-y-4">
-                <div className="flex justify-between items-end">
-                  <div className="flex flex-col items-center">
+                <div className="flex justify-center gap-8 items-end">
+                  <div className="flex flex-col items-center w-12">
                     <Fan className={`h-6 w-6 mb-2 ${isFlying ? 'animate-spin' : ''} text-slate-500`} />
                     <span>M1</span>
-                    <span className="text-cyan-300">{isFlying ? telemetry.rpm1 : 0}</span>
+                    <span className="text-cyan-300 tabular-nums">{isFlying ? telemetry.rpm1 : 0}</span>
                   </div>
-                  <div className="flex flex-col items-center">
+                  <div className="flex flex-col items-center w-12">
                     <Fan className={`h-6 w-6 mb-2 ${isFlying ? 'animate-spin' : ''} text-slate-500`} />
                     <span>M2</span>
-                    <span className="text-cyan-300">{isFlying ? telemetry.rpm2 : 0}</span>
+                    <span className="text-cyan-300 tabular-nums">{isFlying ? telemetry.rpm2 : 0}</span>
                   </div>
-                  <div className="flex flex-col items-center">
+                  <div className="flex flex-col items-center w-12">
                     <Fan className={`h-6 w-6 mb-2 ${isFlying ? 'animate-spin' : ''} text-slate-500`} />
                     <span>M3</span>
-                    <span className="text-cyan-300">{isFlying ? telemetry.rpm3 : 0}</span>
+                    <span className="text-cyan-300 tabular-nums">{isFlying ? telemetry.rpm3 : 0}</span>
                   </div>
-                  <div className="flex flex-col items-center">
+                  <div className="flex flex-col items-center w-12">
                     <Fan className={`h-6 w-6 mb-2 ${isFlying ? 'animate-spin' : ''} text-slate-500`} />
                     <span>M4</span>
-                    <span className="text-cyan-300">{isFlying ? telemetry.rpm4 : 0}</span>
+                    <span className="text-cyan-300 tabular-nums">{isFlying ? telemetry.rpm4 : 0}</span>
                   </div>
                 </div>
               </CardContent>
@@ -238,8 +248,8 @@ export default function DigitalTwinPage() {
                   <span className="text-yellow-300">{isFlying ? telemetry.roll : "0.00"}°</span>
                 </div>
                 <div className="w-full bg-slate-800 h-2 mt-4 rounded overflow-hidden">
-                  <div 
-                    className="bg-yellow-400 h-full transition-all duration-75" 
+                  <div
+                    className="bg-yellow-400 h-full transition-all duration-75"
                     style={{ width: isFlying ? `${50 + (parseFloat(telemetry.pitch) * 5)}%` : '50%' }}
                   />
                 </div>
@@ -247,7 +257,7 @@ export default function DigitalTwinPage() {
             </Card>
 
             {/* Sub-system Health Check */}
-            <Card className="bg-slate-900 border-none text-slate-300 md:col-span-2 lg:col-span-1">
+            <Card className="bg-slate-900 border-none text-slate-300">
               <CardHeader className="pb-2">
                 <CardTitle className="font-mono text-sm text-emerald-400">Subsystem Diagnostics</CardTitle>
               </CardHeader>
@@ -278,6 +288,36 @@ export default function DigitalTwinPage() {
                     <span className="text-emerald-400 font-bold">NOMINAL</span>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Sensor Telemetry */}
+            <Card className="bg-slate-900 border-none text-slate-300">
+              <CardHeader className="pb-2">
+                <CardTitle className="font-mono text-sm text-cyan-400 flex items-center gap-2">
+                  Environment Sensors
+                </CardTitle>  
+              </CardHeader>
+              <CardContent className="font-mono text-xs">
+                {!activeDrone?.sensors || activeDrone.sensors.length === 0 ? (
+                  <div className="text-slate-500 italic">No sensor telemetry available.</div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    {activeDrone.sensors.map((sensor, idx) => (
+                      <div key={idx} className="flex flex-col gap-1 border border-slate-800 p-2 rounded-md">
+                        <div className="flex justify-between items-center text-slate-400">
+                          <span className="uppercase">{sensor.type}</span>
+                          <span className={`${sensor.status === 'active' ? 'text-emerald-400' : sensor.status === 'damaged' ? 'text-red-500' : sensor.status === 'not_installed' ? 'text-slate-600' : 'text-slate-500'}`}>
+                            {sensor.status === 'not_installed' ? 'N/A' : sensor.status.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className={`truncate font-semibold ${sensor.status === 'not_installed' ? 'text-slate-600' : 'text-slate-200'}`} title={String(sensor.value)}>
+                          {sensor.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 

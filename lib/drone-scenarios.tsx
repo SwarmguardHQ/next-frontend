@@ -75,7 +75,7 @@ export const SCENARIOS: Record<ScenarioId, DroneScenario> = {
     steps: [
       "EMERGENCY LAND triggered",
       "Cutting non-essential systems",
-      "Descending at max safe rate — 4 m/s",
+      "Descending at max safe rate — 14.4 km/h",
       "Ground proximity detected — 5m",
       "Motors disarmed — drone secured",
     ],
