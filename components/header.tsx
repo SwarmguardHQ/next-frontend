@@ -32,7 +32,7 @@ export default function Header() {
     { href: "/dashboard", icon: Home, label: "Dashboard" },
       { href: "/map", icon: Map, label: "Live Map" },
       { href: "/missions", icon: ShoppingCart, label: "Missions" },
-      { href: "#", icon: Package, label: "Scenarios" },
+      { href: "/drone-command", icon: Package, label: "Human In Loop" },
       { href: "/drones", icon: Users2, label: "Drones" },
     { href: "#", icon: LineChart, label: "Analytics" },
   ];
