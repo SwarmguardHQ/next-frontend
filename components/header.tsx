@@ -17,7 +17,7 @@ import {
   Package,
   PanelLeft,
   ShoppingCart,
-  Users2,
+  Cpu,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -33,8 +33,8 @@ export default function Header() {
       { href: "/map", icon: Map, label: "Live Map" },
       { href: "/missions", icon: ShoppingCart, label: "Missions" },
       // { href: "/drone-command", icon: Package, label: "Human In Loop" },
-      { href: "/drones", icon: Users2, label: "Drones" },
-    { href: "#", icon: LineChart, label: "Analytics" },
+      { href: "/fleet", icon: Cpu, label: "Drones" },
+      // { href: "/drones", icon: Users2, label: "Drones" },
   ];
 
   return (
