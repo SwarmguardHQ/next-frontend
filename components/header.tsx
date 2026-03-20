@@ -35,7 +35,6 @@ export default function Header() {
       // { href: "/drone-command", icon: Package, label: "Human In Loop" },
       { href: "/fleet", icon: Cpu, label: "Drones" },
       // { href: "/drones", icon: Users2, label: "Drones" },
-    { href: "#", icon: LineChart, label: "Analytics" },
   ];
 
   return (

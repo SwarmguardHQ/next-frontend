@@ -48,7 +48,6 @@ export default function Sidebar() {
     // { href: "/drone-command", icon: Layers, label: "Human In Loop" },
     { href: "/fleet", icon: Cpu, label: "Drones" },
     // { href: "/drones", icon: Cpu, label: "Drones" },
-    { href: "/analytics", icon: BarChart3, label: "Analytics" },
   ];
 
   return (
