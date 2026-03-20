@@ -404,13 +404,13 @@ export default function MissionsPage() {
                 value={selectedScenario}
                 onValueChange={setSelectedScenario}
               >
-                <SelectTrigger>
+                <SelectTrigger className="capitalize">
                   <SelectValue placeholder="Choose a scenario…" />
                 </SelectTrigger>
                 <SelectContent>
                   {scenariosData?.scenarios.map((s) => (
-                    <SelectItem key={s.name} value={s.name}>
-                      {s.name}
+                    <SelectItem key={s.name} value={s.name} className="capitalize">
+                      {s.name.replace(/_/g, ' ')}
                     </SelectItem>
                   ))}
                 </SelectContent>
