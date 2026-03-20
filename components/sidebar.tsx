@@ -30,7 +30,7 @@ export default function Sidebar() {
     { href: "/missions", icon: Target, label: "Missions" },
     { href: "/drone-command", icon: Layers, label: "Human In Loop" },
     { href: "/drones", icon: Cpu, label: "Drones" },
-    { href: "#", icon: BarChart3, label: "Analytics" },
+    { href: "/analytics", icon: BarChart3, label: "Analytics" },
   ];
 
   return (
