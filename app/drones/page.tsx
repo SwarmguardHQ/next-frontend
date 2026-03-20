@@ -11,15 +11,15 @@ import { Cpu, Wifi, Battery, Activity, Eye, RadioReceiver, Fan } from "lucide-re
 // Mock telemetry data generator for a single drone
 function generateTelemetry(baseAltitude: number) {
   return {
-    altitude: (baseAltitude + (Math.random() * 2 - 1)).toFixed(1),
-    speed: (Math.random() * 15).toFixed(1),
-    rpm1: Math.floor(4000 + Math.random() * 200),
-    rpm2: Math.floor(4000 + Math.random() * 200),
-    rpm3: Math.floor(4000 + Math.random() * 200),
-    rpm4: Math.floor(4000 + Math.random() * 200),
-    pitch: (Math.random() * 10 - 5).toFixed(2),
-    roll: (Math.random() * 10 - 5).toFixed(2),
-    yaw: (Math.random() * 360).toFixed(1),
+    altitude: (baseAltitude + (Math.random() * 0.4 - 0.2)).toFixed(1),
+    speed: (12.5 + (Math.random() * 0.8 - 0.4)).toFixed(1),
+    rpm1: Math.floor(4500 + Math.random() * 30 - 15),
+    rpm2: Math.floor(4500 + Math.random() * 30 - 15),
+    rpm3: Math.floor(4500 + Math.random() * 30 - 15),
+    rpm4: Math.floor(4500 + Math.random() * 30 - 15),
+    pitch: (Math.random() * 3 - 1.5).toFixed(2),
+    roll: (Math.random() * 2 - 1.0).toFixed(2),
+    yaw: (85 + Math.random() * 1.5).toFixed(1),
   };
 }
 
@@ -55,7 +55,7 @@ export default function DigitalTwinPage() {
 
     const interval = setInterval(() => {
       setTelemetry(generateTelemetry(activeDrone?.status === "returning" ? 80 : 50));
-    }, 200); // 5Hz UI update
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [selectedDrone, drones]);
@@ -63,6 +63,9 @@ export default function DigitalTwinPage() {
   const activeDrone = drones.find((d) => d.drone_id === selectedDrone);
   const isFlying = activeDrone?.status === "flying" || activeDrone?.status === "scanning" || activeDrone?.status === "returning" || activeDrone?.status === "delivering";
   const isOffline = activeDrone?.status === "offline";
+
+  // Determine video based on selected drone
+  const videoSrc = activeDrone?.drone_id === "D2" ? "/drone-feed2.mp4" : "/drone-feed1.mp4";
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -130,26 +133,44 @@ export default function DigitalTwinPage() {
                 </div>
               ) : isFlying ? (
                 <>
-                  {/* Mock live camera view using CSS styling */}
-                  <div className="absolute inset-0 bg-green-900/20 grayscale contrast-150 brightness-150 mix-blend-screen opacity-50"></div>
-                  {/* CSS "Scanline" effect */}
-                  <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] pointer-events-none"></div>
-                  
+                  {/* Live Video Feed Background */}
+                    <div className="absolute inset-0 w-full h-full z-0 overflow-hidden pointer-events-none">
+                      <video
+                        key={videoSrc}
+                        autoPlay
+                        loop={true}
+                        muted
+                        playsInline
+                        className="w-full h-full object-cover grayscale contrast-125 select-none"
+                      >
+                        <source src={videoSrc} type="video/mp4" />                        </video>
+                      </div>
+                    {/* Military Tint Filter over Video */}
+                    <div className="absolute inset-0 bg-green-900/30 mix-blend-color z-0 pointer-events-none"></div>
+                  <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] pointer-events-none z-10"></div>
+
                   {/* Crosshair overlay */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
                     <div className="w-16 h-16 border-2 border-green-500/50 rounded-full flex items-center justify-center">
-                      <div className="w-1 h-1 bg-green-400 rounded-full"></div>
+                      <div className="w-1 h-1 bg-green-400 rounded-full animate-ping"></div>
                     </div>
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-[1px] bg-green-500/30"></div>
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-24 w-[1px] bg-green-500/30"></div>
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-[1px] bg-green-500/50"></div>
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-24 w-[1px] bg-green-500/50"></div>
+                    {/* Targeting Box */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 border border-green-500/10">
+                      <div className="absolute -top-1 -left-1 w-3 h-3 border-t-[3px] border-l-[3px] border-green-400"></div>
+                      <div className="absolute -top-1 -right-1 w-3 h-3 border-t-[3px] border-r-[3px] border-green-400"></div>
+                      <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-[3px] border-l-[3px] border-green-400"></div>
+                      <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-[3px] border-r-[3px] border-green-400"></div>
+                    </div>
                   </div>
 
-                  <div className="absolute bottom-4 left-4 text-green-400 font-mono text-xs">
+                  <div className="absolute bottom-4 left-4 text-green-400 font-mono text-xs z-20 bg-black/60 px-2 py-1 rounded backdrop-blur-md">
                     <div>LAT: {activeDrone?.position.y.toFixed(5)}</div>
                     <div>LNG: {activeDrone?.position.x.toFixed(5)}</div>
-                    <div>ALT: {telemetry.altitude}m</div>
+                    <div>ALT: <span className="text-white">{telemetry.altitude}m</span></div>
                   </div>
-                  <div className="absolute bottom-4 right-4 text-green-400 font-mono text-xs text-right">
+                  <div className="absolute bottom-4 right-4 text-green-400 font-mono text-xs text-right z-20 bg-black/60 px-2 py-1 rounded backdrop-blur-md">
                     <div>SPD: {telemetry.speed}m/s</div>
                     <div>BAT: {activeDrone?.battery}%</div>
                     <div>VSYNC: {telemetry.rpm1}</div>
