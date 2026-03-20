@@ -210,7 +210,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { api } from "@/lib/mock_api";
+import { api } from "@/lib/api";
 import type {
   MissionsListResponse, ScenariosListResponse,
 } from "@/types/api_types";
