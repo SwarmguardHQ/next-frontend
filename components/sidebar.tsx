@@ -72,6 +72,7 @@ export default function Sidebar() {
             width={28}
             height={28}
             className="rounded-sm"
+            style={{ width: "auto", height: "auto" }}
           />
           {!collapsed && (
             <span className="text-xs font-semibold tracking-wider text-foreground">SIREN</span>
