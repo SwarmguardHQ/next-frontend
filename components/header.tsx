@@ -67,6 +67,7 @@ export default function Header() {
                 width={28}
                 height={28}
                 className="rounded-sm"
+                style={{ width: "auto", height: "auto" }}
               />
               <span className="text-xs font-semibold tracking-wider text-slate-100">SIREN</span>
             </Link>
