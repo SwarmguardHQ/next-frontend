@@ -29,12 +29,25 @@ export interface Survivor {
   supplies_received: string[];
 }
 
-export interface SwarmSummary {
+export interface SwarmDronesSummary {
   total: number;
   active: number;
   offline: number;
   charging: number;
-  low_battery: string[];
+  low_battery: { id: string; battery: number }[];
+}
+
+export interface SwarmSurvivorsSummary {
+  total: number;
+  detected: number;
+  rescued: number;
+  critical_unrescued: number;
+}
+
+export interface SwarmSummary {
+  drones: SwarmDronesSummary;
+  survivors: SwarmSurvivorsSummary;
+  mission_complete: boolean;
 }
 
 export interface WorldMapResponse {

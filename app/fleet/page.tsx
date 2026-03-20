@@ -21,7 +21,7 @@ const FLEET_META: Record<string, {
     windResistance: string; payload: string;
     callouts: { label: string; angle: number; radius: number; yOffset: number }[];
 }> = {
-    D1: {
+    DRONE_ALPHA: {
         name: "Falcon Alpha", model: "Recon MkIV", tagline: "Eyes in the sky",
         description: "Designed for extended perimeter surveillance. Equipped with a stabilised 4K gimbal, Falcon Alpha delivers crystal-clear imagery in challenging conditions with its IP54-rated enclosure.",
         accentHex: "#3b82f6", accentHexLight: "#93c5fd", threeColor: 0x3b82f6,
@@ -33,7 +33,7 @@ const FLEET_META: Record<string, {
             { label: "GPS Module", angle: 275, radius: 1.4, yOffset: 0.4 },
         ],
     },
-    D2: {
+    DRONE_BRAVO: {
         name: "Hawk Beta", model: "Survey Pro X", tagline: "Map the unmappable",
         description: "A heavy-lift hexacopter built for precision mapping. Hawk Beta carries a full LiDAR suite and RGB camera array, generating centimetre-accurate 3D models of terrain and structures.",
         accentHex: "#10b981", accentHexLight: "#6ee7b7", threeColor: 0x10b981,
@@ -45,7 +45,7 @@ const FLEET_META: Record<string, {
             { label: "Data Link", angle: 265, radius: 1.5, yOffset: 0.5 },
         ],
     },
-    D3: {
+    DRONE_CHARLIE: {
         name: "Eagle Gamma", model: "Cargo Swift", tagline: "Speed when it matters",
         description: "Built for speed and payload capacity, Eagle Gamma is the fleet's supply runner. Its octocopter configuration provides redundant lift for fast point-to-point cargo delivery.",
         accentHex: "#f59e0b", accentHexLight: "#fcd34d", threeColor: 0xf59e0b,
@@ -57,7 +57,7 @@ const FLEET_META: Record<string, {
             { label: "RTK GPS", angle: 280, radius: 1.5, yOffset: 0.4 },
         ],
     },
-    D4: {
+    DRONE_DELTA: {
         name: "Osprey Delta", model: "Stealth Lite", tagline: "Silent. Swift. Decisive.",
         description: "Osprey Delta is the fleet's fastest responder. A whisper-quiet profile and thermal imaging suite make it ideal for night operations and covert surveillance.",
         accentHex: "#8b5cf6", accentHexLight: "#c4b5fd", threeColor: 0x8b5cf6,
@@ -67,6 +67,18 @@ const FLEET_META: Record<string, {
             { label: "Thermal Cam", angle: 40, radius: 1.6, yOffset: -0.3 },
             { label: "Noise Damp.", angle: 170, radius: 1.5, yOffset: 0.2 },
             { label: "Stealth Body", angle: 275, radius: 1.6, yOffset: 0.3 },
+        ],
+    },
+    DRONE_ECHO: {
+        name: "Phantom Echo", model: "Signal Relay", tagline: "Never lose connection",
+        description: "The backbone of the swarm's communication array. Phantom Echo acts as a mobile mesh relay, extending the operational range of the entire fleet in deep terrain.",
+        accentHex: "#ec4899", accentHexLight: "#f9a8d4", threeColor: 0xec4899,
+        maxSpeed: 18, weightKg: 1.6, rangeKm: 22, flightTime: 65, windResistance: "Level 4",
+        payload: "High-Gain Mesh Antenna",
+        callouts: [
+            { label: "Mesh Antenna", angle: 45, radius: 1.6, yOffset: -0.5 },
+            { label: "Signal Amp.", angle: 185, radius: 1.4, yOffset: 0.2 },
+            { label: "High-Cap Battery", angle: 275, radius: 1.5, yOffset: 0.3 },
         ],
     },
 };
@@ -665,9 +677,17 @@ export default function DroneFleetPage() {
         const fetch = async () => {
             try {
                 const res = await api.world.getDrones();
-                setDrones(res.drones);
+                const dronesWithSensors: Drone[] = res.drones.map((d) => ({
+                    ...d,
+                    sensors: d.sensors?.length ? d.sensors : [
+                        { type: "visual", status: d.battery < 10 ? "damaged" : "active", value: "4K/60fps" },
+                        { type: "thermal", status: d.battery < 10 ? "offline" : "active", value: "FLIR Boson" },
+                        { type: "audio", status: "not_installed", value: "N/A" }
+                    ]
+                } as any));
+                setDrones(dronesWithSensors);
                 // Update selected drone data if in showcase
-                setSelected((prev) => prev ? res.drones.find((d) => d.drone_id === prev.drone_id) ?? prev : null);
+                setSelected((prev) => prev ? dronesWithSensors.find((d) => d.drone_id === prev.drone_id) ?? prev : null);
             } catch (e) { console.error(e); }
         };
         fetch();

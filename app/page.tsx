@@ -45,7 +45,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api } from "@/lib/api";
-import type { DronesResponse } from "@/types/api_types";
+import type { DronesResponse, SurvivorsResponse } from "@/types/api_types";
 
 // ─── Stream types ──────────────────────────────────────────────────────────────
 type StreamPoint = {
@@ -152,18 +152,13 @@ const SECTOR_DATA = [
   { sector: "SE", completed: 14, pending: 3 },
 ];
 
-const SURVIVOR_NEEDS = [
-  { need: "Medical",    count: 42 },
-  { need: "Water",      count: 77 },
-  { need: "Food",       count: 63 },
-  { need: "Shelter",    count: 28 },
-  { need: "Extraction", count: 22 },
-];
+
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   // Live drone data from API
   const [droneData, setDroneData] = useState<DronesResponse | null>(null);
+  const [survivorData, setSurvivorData] = useState<SurvivorsResponse | null>(null);
   const [apiLoading, setApiLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -177,8 +172,11 @@ export default function DashboardPage() {
     let alive = true;
     const fetch_ = async () => {
       try {
-        const res = await api.world.getDrones();
-        if (alive) { setDroneData(res); setApiError(null); }
+        const [dRes, sRes] = await Promise.all([
+          api.world.getDrones(),
+          api.world.getSurvivors(),
+        ]);
+        if (alive) { setDroneData(dRes); setSurvivorData(sRes); setApiError(null); }
       } catch (e: any) {
         if (alive) setApiError(e.message || "Backend unreachable.");
       } finally {
@@ -253,30 +251,50 @@ export default function DashboardPage() {
 
   const fleetPieData = useMemo(() => {
     const live = droneData?.drones ?? [];
-    const flying   = live.filter(d => ["flying","delivering"].includes(d.status)).length;
+    const active   = live.filter(d => ["flying", "delivering", "returning"].includes(d.status)).length;
     const scanning = live.filter(d => d.status === "scanning").length;
     const charging = live.filter(d => d.status === "charging").length;
+    const standby  = live.filter(d => d.status === "idle").length;
     const offline  = live.filter(d => d.status === "offline").length;
+
     // If no live data fall back to stream-derived values
     if (!live.length) {
       return [
-        { name: "Flying",   value: Math.max(current.activeDrones - 2, 0), color: T.blue },
+        { name: "Active",   value: Math.max(current.activeDrones - 2, 0), color: T.blue },
         { name: "Scanning", value: 2,                                       color: T.green },
         { name: "Charging", value: 1,                                       color: T.amber },
         { name: "Offline",  value: 5 - current.activeDrones,               color: T.red },
       ];
     }
     return [
-      { name: "Flying",   value: flying,   color: T.blue },
+      { name: "Active",   value: active,   color: T.blue },
       { name: "Scanning", value: scanning, color: T.green },
       { name: "Charging", value: charging, color: T.amber },
+      { name: "Standby",  value: standby,  color: T.textDim },
       { name: "Offline",  value: offline,  color: T.red },
-    ];
+    ].filter(item => item.value > 0);
   }, [droneData, current.activeDrones]);
 
   const fleetReadiness = droneData
-    ? `${droneData.summary.active}/${droneData.summary.total} Active`
+    ? `${droneData.summary.drones.active}/${droneData.summary.drones.total} Active`
     : `${current.activeDrones}/5 Active`;
+
+  const survivorNeedsData = useMemo(() => {
+    if (!survivorData) return [];
+    let medical = 0, water = 0, food = 0, shelter = 0, extraction = 0;
+    for (const s of survivorData.survivors) {
+      if (s.condition === "critical") { medical += 2; water += 1; extraction += 2; }
+      else if (s.condition === "moderate") { medical += 1; water += 1; food += 1; shelter += 1; }
+      else if (s.condition === "stable") { food += 1; water += 1; }
+    }
+    return [
+      { need: "Medical",    count: medical },
+      { need: "Water",      count: water },
+      { need: "Food",       count: food },
+      { need: "Shelter",    count: shelter },
+      { need: "Extraction", count: extraction },
+    ];
+  }, [survivorData]);
 
   if (!mounted) {
     return <div className="min-h-screen animate-pulse rounded-lg bg-[#0d1117]" />;
@@ -363,8 +381,8 @@ export default function DashboardPage() {
           {
             label: "Fleet Readiness",
             value: fleetReadiness,
-            hint: droneData?.summary.low_battery?.length
-              ? `${droneData.summary.low_battery.length} drone(s) need charging`
+            hint: droneData?.summary.drones.low_battery?.length
+              ? `${droneData.summary.drones.low_battery.length} drone(s) need charging`
               : current.activeDrones < 5 ? "One drone in degraded state" : "All mission drones available",
             icon: <ShieldCheck className="h-4 w-4 text-emerald-300" />,
           },
@@ -400,7 +418,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="h-[280px] w-full min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={280} minWidth={0} minHeight={0}>
                 <LineChart data={points}>
                   <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
                   <XAxis dataKey="time" tick={{ fill: T.textDim, fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={26} />
@@ -432,7 +450,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="h-[280px] w-full min-w-0">
-              <ResponsiveContainer width="100%" height={210}>
+              <ResponsiveContainer width="100%" height={240} minWidth={0} minHeight={0}>
                 <PieChart>
                   <Pie data={fleetPieData} cx="50%" cy="50%" innerRadius={60} outerRadius={88} paddingAngle={4} dataKey="value">
                     {fleetPieData.map((e, i) => <Cell key={i} fill={e.color} />)}
@@ -540,7 +558,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="h-[230px] w-full min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={230} minWidth={0} minHeight={0}>
                 <BarChart data={SECTOR_DATA}>
                   <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
                   <XAxis dataKey="sector" tick={{ fill: T.textDim, fontSize: 11 }} tickLine={false} axisLine={false} />
@@ -562,8 +580,8 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="h-[230px] w-full min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={SURVIVOR_NEEDS} layout="vertical">
+              <ResponsiveContainer width="100%" height={230} minWidth={0} minHeight={0}>
+                <BarChart data={survivorNeedsData} layout="vertical">
                   <CartesianGrid stroke="rgba(148,163,184,0.12)" horizontal vertical={false} />
                   <XAxis type="number"   tick={{ fill: T.textDim, fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis type="category" dataKey="need" tick={{ fill: T.textDim, fontSize: 11 }} tickLine={false} axisLine={false} />
@@ -572,7 +590,7 @@ export default function DashboardPage() {
                     formatter={(v: unknown) => [`${toNumber(v)} requests`, "Demand"]}
                   />
                   <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={16}>
-                    {SURVIVOR_NEEDS.map((item) => (
+                    {survivorNeedsData.map((item) => (
                       <Cell key={item.need} fill={item.count >= 70 ? T.red : item.count >= 50 ? T.amber : T.blue} />
                     ))}
                   </Bar>
@@ -621,7 +639,7 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="h-[170px] w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={170} minWidth={0} minHeight={0}>
               <AreaChart data={points}>
                 <defs>
                   <linearGradient id="covFill" x1="0" y1="0" x2="0" y2="1">
