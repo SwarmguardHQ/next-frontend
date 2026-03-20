@@ -15,22 +15,19 @@ import type {
 
 // In-memory fake state
 let fakeMissions: MissionListItem[] = [
-  {
-    mission_id: "m_fake_1",
-    scenarios: "survivor_detect",
-    status: "complete",
-    started_at: new Date(Date.now() - 3600000).toISOString(),
-    finished_at: new Date(Date.now() - 3500000).toISOString(),
-  }
+
 ];
 
 const fakeScenarios: ScenariosListResponse = {
   scenarios: [
-    { name: "survivor_detect", prompt_preview: "Locate all survivors in the zone." },
+    { name: "battery_crisis", prompt_preview: "Manage drone fleet with low batteries." },
+    { name: "offline_recovery", prompt_preview: "Recover connection to offline drone units." },
+    { name: "rescue_priority", prompt_preview: "Determine priority for multiple rescue targets." },
     { name: "supply_run", prompt_preview: "Deliver supplies to critical survivors." },
-    { name: "battery_crisis", prompt_preview: "Manage drone fleet with low batteries." }
+    { name: "survivor_detect", prompt_preview: "Locate all survivors in the zone." },
+    { name: "swarm_status", prompt_preview: "Analyze and report the full swarm status." }
   ],
-  total: 3
+  total: 7
 };
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));

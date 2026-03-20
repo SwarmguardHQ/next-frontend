@@ -102,11 +102,18 @@ export default function MissionsPage() {
                   <SelectValue placeholder="Choose a scenario..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {scenariosData?.scenarios.map((scenario) => (
-                    <SelectItem key={scenario.name} value={scenario.name}>
-                      {scenario.name}
-                    </SelectItem>
-                  ))}
+                  {scenariosData?.scenarios.map((scenario) => {
+                    const formattedName = scenario.name
+                      .split('_')
+                      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                      .join(' ');
+                    
+                    return (
+                      <SelectItem key={scenario.name} value={scenario.name}>
+                        {formattedName}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
