@@ -60,12 +60,11 @@ export default function LiveMissionConsole() {
     return () => clearInterval(interval);
   }, [missionId]);
 
-  // Establish Server-Sent Events (SSE) stream for live CoT logs
+// Establish mock stream for fake data
   useEffect(() => {
     if (!missionId) return;
 
     setStreamActive(true);
-    const sse = new EventSource(`${API_BASE_URL}/mission/${missionId}/stream`);
 
     const addLog = (eventData: Partial<LogEvent>) => {
       setLogs((prev) => [
@@ -79,48 +78,50 @@ export default function LiveMissionConsole() {
       ]);
     };
 
-    sse.addEventListener("message", (e) => {
-       // Catch-all
-    });
+    let step = 0;
+    const mockSteps = [
+      { type: "log", message: "Initializing connection to drone network..." },
+      { type: "log", message: "Authenticating with Swarm Commander credentials..." },
+      { type: "step", data: { phase: "PLANNING", tool: "mission_planner", reasoning: "We need to distribute drones efficiently across the grid.", result_summary: "Calculated 4 optimal search zones." } },
+      { type: "log", message: "Assigning zones to drones D1, D2, D3, D4." },
+      { type: "step", data: { phase: "EXECUTION", tool: "movement_tools", reasoning: "Drones must navigate to their zones before scanning.", result_summary: "Movement commands issued successfully." } },
+      { type: "log", message: "D1 reached coordinates (4, 4)." },
+      { type: "log", message: "D2 reached coordinates (16, 4)." },
+      { type: "step", data: { phase: "SCANNING", tool: "scan_tools", reasoning: "Using thermal imaging to find survivors in assigned sectors.", result_summary: "Detected 2 heat signatures in Sector Alpha." } },
+      { type: "log", message: "Survivor localized at (5, 6). Condition: Stable." },
+      { type: "step", data: { phase: "RESCUE", tool: "rescue_tools", reasoning: "Survivor needs a medical supply drop.", result_summary: "Dispatched drone D1 with first aid payload." } },
+      { type: "log", message: "Payload delivered successfully." },
+      { type: "complete", data: { debrief: "Mission accomplished. All zones scanned and required payloads delivered." } }
+    ];
 
-    sse.addEventListener("log", (e) => {
-      const data = JSON.parse((e as MessageEvent).data);
-      addLog({ type: "log", message: data.message });
-    });
-
-    sse.addEventListener("step", (e) => {
-      const data = JSON.parse((e as MessageEvent).data);
-      addLog({
-        type: "step",
-        phase: data.phase,
-        tool: data.tool,
-        reasoning: data.reasoning,
-        result_summary: data.result_summary,
-      });
-    });
-
-    sse.addEventListener("error", (e) => {
-      const data = JSON.parse((e as MessageEvent).data);
-      addLog({ type: "error", message: data.message });
-      setStreamActive(false);
-      sse.close();
-    });
-
-    sse.addEventListener("complete", (e) => {
-      const data = JSON.parse((e as MessageEvent).data);
-      addLog({ type: "complete", debrief: data.debrief });
-      setStreamActive(false);
-      sse.close();
-    });
-
-    sse.onerror = (err) => {
-      console.error("SSE stream error", err);
-      setStreamActive(false);
-      sse.close();
+    let timer: NodeJS.Timeout;
+    
+    const runStep = () => {
+      if (step >= mockSteps.length) return;
+      
+      const current = mockSteps[step];
+      if (current.type === "log") {
+        addLog({ type: "log", message: current.message as string });
+      } else if (current.type === "step") {
+        addLog({
+          type: "step",
+          ...current.data
+        });
+      } else if (current.type === "complete") {
+        addLog({ type: "complete", debrief: (current.data as any).debrief });
+        setStreamActive(false);
+      }
+      
+      step++;
+      if (step < mockSteps.length) {
+        timer = setTimeout(runStep, 1500 + Math.random() * 2000);
+      }
     };
 
+    timer = setTimeout(runStep, 1000);
+
     return () => {
-      sse.close();
+      clearTimeout(timer);
     };
   }, [missionId]);
 

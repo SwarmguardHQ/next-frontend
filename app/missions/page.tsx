@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { api } from "@/lib/api";
+import { api } from "@/lib/mock_api";
 import type { MissionsListResponse, ScenariosListResponse, MissionListItem, Scenario } from "@/types/api_types";
 import { AlertCircle, CheckCircle2, Clock, Play, AlertOctagon, Terminal } from "lucide-react";
 

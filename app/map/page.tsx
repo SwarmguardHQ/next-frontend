@@ -7,16 +7,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Map, Plane, HeartPulse, BatteryCharging, Package, Activity, Navigation, Triangle } from "lucide-react";
 
-const GRID_SIZE = 10;
+const GRID_SIZE = 20;
 
 const CHARGING_STATIONS = [
   { id: "CS1", x: 0, y: 0 },
-  { id: "CS2", x: 9, y: 0 },
+  { id: "CS2", x: 19, y: 0 },
 ];
 
 const SUPPLY_DEPOTS = [
   { id: "D1", x: 0, y: 0 },
-  { id: "D2", x: 9, y: 9 },
+  { id: "D2", x: 19, y: 19 },
 ];
 
 export default function SimulationMapPage() {
@@ -81,20 +81,20 @@ export default function SimulationMapPage() {
         </h2>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5 xl:grid-cols-6">
         {/* Left Side: The Map */}
-        <Card className="md:col-span-3 bg-slate-950 border-slate-800">
+        <Card className="md:col-span-4 xl:col-span-5 bg-slate-950 border-slate-800">
           <CardHeader>
-            <CardTitle className="text-slate-200">Sector Grid (10x10)</CardTitle>
+            <CardTitle className="text-slate-200">Sector Grid (20x20)</CardTitle>
             <CardDescription className="text-slate-400">Real-time drone telemetry and survivor locations.</CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center p-6">
+          <CardContent className="flex justify-center p-2 lg:p-6 overflow-x-auto">
             <div 
-              className="grid gap-[2px] bg-slate-800 p-[2px] rounded-lg shadow-2xl" 
+              className="grid gap-[1px] bg-slate-800 p-[1px] rounded-lg shadow-2xl" 
               style={{
                 gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
-                width: '100%',
-                maxWidth: '600px',
+                width: '100%', minWidth: '600px',
+                maxWidth: '1000px',
                 aspectRatio: '1/1'
               }}
             >
@@ -107,7 +107,7 @@ export default function SimulationMapPage() {
                 return (
                   <div 
                     key={`${cell.x}-${cell.y}`} 
-                    className="bg-slate-900 relative rounded-sm flex items-center justify-center hover:bg-slate-800 transition-colors group"
+                    className="bg-slate-900 relative rounded-sm flex items-center justify-center hover:bg-slate-800 transition-colors group aspect-square"
                   >
                     {/* Background indicators for infrastructure */}
                     {isCS && <BatteryCharging className="absolute top-1 left-1 h-3 w-3 text-emerald-900 opacity-50" />}
