@@ -195,7 +195,7 @@ function ShowcaseCanvas({ drone, flying }: { drone: Drone; flying: boolean }) {
         const mesh = buildDroneMesh(meta.threeColor, 4);
         mesh.position.y = flying ? 0.6 : -0.3;scene.add(mesh);
 
-        const clock = new THREE.Clock();
+        const timer = new THREE.Timer();
         let dragging = false, prevMouse = { x: 0, y: 0 }, autoRotate = true, raf = 0;
 
         const onDown = (e: MouseEvent) => { dragging = true; autoRotate = false; prevMouse = { x: e.clientX, y: e.clientY }; };
@@ -212,7 +212,8 @@ function ShowcaseCanvas({ drone, flying }: { drone: Drone; flying: boolean }) {
 
         const animate = () => {
             raf = requestAnimationFrame(animate);
-            const t = clock.getElapsedTime();
+            timer.update();
+            const t = timer.getElapsed();
             if (autoRotate) spherical.theta += 0.004;
             camera.position.set(
                 spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta),
