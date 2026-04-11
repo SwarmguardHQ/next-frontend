@@ -45,9 +45,7 @@ export default function Sidebar() {
     { href: "/", icon: Home, label: "Dashboard" },
     { href: "/map", icon: Map, label: "Live Map" },
     { href: "/missions", icon: Target, label: "Missions" },
-    // { href: "/drone-command", icon: Layers, label: "Human In Loop" },
     { href: "/fleet", icon: Cpu, label: "Drones" },
-    // { href: "/drones", icon: Cpu, label: "Drones" },
   ];
 
   return (
@@ -71,7 +69,6 @@ export default function Sidebar() {
             width={28}
             height={28}
             className="rounded-sm"
-            style={{ width: "auto", height: "auto" }}
           />
           {!collapsed && (
             <span className="text-xs font-semibold tracking-wider text-foreground">SIREN</span>
