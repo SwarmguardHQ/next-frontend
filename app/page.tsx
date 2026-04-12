@@ -45,7 +45,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api } from "@/lib/api";
-import type { DronesResponse, SurvivorsResponse } from "@/types/api_types";
+import type {
+  DronesResponse,
+  SurvivorsResponse,
+  WorldMetricsResponse,
+} from "@/types/api_types";
 
 // ─── Stream types ──────────────────────────────────────────────────────────────
 type StreamPoint = {
@@ -160,6 +164,7 @@ export default function DashboardPage() {
   // Live drone data from API
   const [droneData, setDroneData] = useState<DronesResponse | null>(null);
   const [survivorData, setSurvivorData] = useState<SurvivorsResponse | null>(null);
+  const [worldMetrics, setWorldMetrics] = useState<WorldMetricsResponse | null>(null);
   const [apiLoading, setApiLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -173,14 +178,17 @@ export default function DashboardPage() {
     let alive = true;
     const fetch_ = async () => {
       try {
-        const [dRes, sRes, mRes] = await Promise.all([
+        const metricsPromise = api.world.getMetrics().catch(() => null);
+        const [dRes, sRes, mRes, metricsRes] = await Promise.all([
           api.world.getDrones(),
           api.world.getSurvivors(),
           api.world.getMeshLog(),
+          metricsPromise,
         ]);
         if (alive) {
           setDroneData(dRes);
           setSurvivorData(sRes);
+          if (metricsRes) setWorldMetrics(metricsRes);
           // Map mesh logs to events only if there are active logs
           if (mRes.mesh_log && mRes.mesh_log.length > 0) {
             const mEvents: EventLog[] = mRes.mesh_log.slice(-12).reverse().map((msg, i) => ({
@@ -238,9 +246,11 @@ export default function DashboardPage() {
         const latBase = 45 + (drones.length * 4);
         const lat = clamp(latBase + (Math.random() * 12 - 6) + (offlineCount * 15), 34, 170);
         
-        // Coverage: Faked to ~60% for demo purposes
-        const covBase = 61.2;
-        const cov = clamp(covBase + (Math.random() * 2.5 - 1.2), 58, 65);
+        // Coverage: live grid exploration from backend when available
+        const cov =
+          worldMetrics != null
+            ? clamp(Number(worldMetrics.coverage_pct), 0, 100)
+            : clamp(38 + (prev.length * 0.46) % 30 + Math.cos(prev.length / 7) * 1.3, 0, 99);
         
         // Risk: Weighted sum of real world threats
         const threats = (offlineCount * 22) + (lowBatCount * 12) + (criticalSurvivors * 18);
@@ -261,7 +271,7 @@ export default function DashboardPage() {
       });
     }, 2000);
     return () => window.clearInterval(tick);
-  }, [droneData, survivorData]);
+  }, [droneData, survivorData, worldMetrics]);
 
   // ── Anomaly alert integration ──
   useEffect(() => {

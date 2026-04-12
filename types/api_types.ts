@@ -56,6 +56,14 @@ export interface WorldMapResponse {
   height: number;
 }
 
+export interface WorldMetricsResponse {
+  grid_size: number;
+  explored_cells: number;
+  total_cells: number;
+  coverage_pct: number;
+  summary: SwarmSummary;
+}
+
 export interface DronesResponse {
   drones: Drone[];
   summary: SwarmSummary;

@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { ChevronLeft, Terminal, Server, AlertOctagon, CheckCircle2, Activity } from "lucide-react";
 import Link from "next/link";
 import type { MissionStatusResponse } from "@/types/api_types";
+import { getBackendOrigin } from "@/lib/backendOrigin";
 
 type LogEvent = {
   id: number;
@@ -21,8 +22,6 @@ type LogEvent = {
   result_summary?: string;
   debrief?: string;
 };
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function LiveMissionConsole() {
   const params = useParams();
@@ -64,7 +63,8 @@ export default function LiveMissionConsole() {
     if (!missionId) return;
 
     // Use direct URL to bypass Next.js proxy buffering for SSE
-    const eventSource = new EventSource(`http://127.0.0.1:8000/mission/${missionId}/stream`);
+    const origin = getBackendOrigin();
+    const eventSource = new EventSource(`${origin}/mission/${missionId}/stream`);
     setStreamActive(true);
 
     eventSource.onmessage = (event) => {
