@@ -205,7 +205,7 @@ export default function SimulationMap3D({ drones, survivors, pulse }: Props) {
       id: "drone-labels",
       data: drones,
       getPosition: (d) => toCoord(d.position.x, d.position.y),
-      getText: (d) => d.drone_id.replace(/^(drone_|DRONE_)/, ""),
+      getText: (d) => d.drone_id.replace("drone_", "D"),
       getSize: 12,
       getColor: [255, 255, 255, 220],
       getTextAnchor: "middle",

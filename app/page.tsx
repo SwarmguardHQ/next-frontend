@@ -107,8 +107,7 @@ function createSeedPoints(): StreamPoint[] {
     const t = START_TIME + i * 2000;
     const anomaly = i === 33 ? 46 : 0;
     const lat = 52 + Math.sin(i / 5) * 9 + anomaly;
-    // Scale seed points so it ends up smoothly near 61%
-    const cov = 38 + i * 0.46 + Math.cos(i / 7) * 1.3;
+    const cov = 38 + i * 1.04 + Math.cos(i / 7) * 1.3;
     const active = i > 34 ? 4 : 5;
     const risk = lat > 90 ? 72 : 24 + Math.sin(i / 4) * 6;
     pts.push({
@@ -173,31 +172,11 @@ export default function DashboardPage() {
     let alive = true;
     const fetch_ = async () => {
       try {
-        const [dRes, sRes, mRes] = await Promise.all([
+        const [dRes, sRes] = await Promise.all([
           api.world.getDrones(),
           api.world.getSurvivors(),
-          api.world.getMeshLog(),
         ]);
-        if (alive) {
-          setDroneData(dRes);
-          setSurvivorData(sRes);
-          // Map mesh logs to events only if there are active logs
-          if (mRes.mesh_log && mRes.mesh_log.length > 0) {
-            const mEvents: EventLog[] = mRes.mesh_log.slice(-12).reverse().map((msg, i) => ({
-              id: `m-${i}`,
-              ts: formatClock(Date.now() - i * 1000), // Approximate timestamp
-              level: msg.includes("CRITICAL") || msg.includes("LOW") ? "ACTION"
-                     : msg.includes("detected") ? "OBS" : "WARN",
-              text: msg,
-            }));
-            setEvents((prev) => {
-              // Try to merge existing demo events if real list is short
-              if (mEvents.length < 3) return [...mEvents, ...prev.slice(0, 3)].slice(0, 12);
-              return mEvents;
-            });
-          }
-          setApiError(null);
-        }
+        if (alive) { setDroneData(dRes); setSurvivorData(sRes); setApiError(null); }
       } catch (e: any) {
         if (alive) setApiError(e.message || "Backend unreachable.");
       } finally {
@@ -205,18 +184,18 @@ export default function DashboardPage() {
       }
     };
     fetch_();
-    const id = setInterval(fetch_, 5000);
+    const id = setInterval(fetch_, 3000);
     return () => { alive = false; clearInterval(id); };
   }, []);
 
-  // ── Telemetry mount ──
+  // ── Telemetry mount + seed events ──
   useEffect(() => {
     setMounted(true);
     const now = Date.now();
     setEvents([
       { id: "e1", ts: formatClock(now - 12000), level: "OBS",    text: "Mesh health nominal. Sector SW link budget stable at 82%." },
       { id: "e2", ts: formatClock(now - 8000),  level: "WARN",   text: "Relay R-3 interference burst detected. RTT exceeded 95 ms threshold." },
-      { id: "e3", ts: formatClock(now - 4000),  level: "ACTION", text: "Fallback route enabled. Drone ALPHA reassigned to maintain sweep continuity." },
+      { id: "e3", ts: formatClock(now - 4000),  level: "ACTION", text: "Fallback route enabled. Drone D3 reassigned to maintain sweep continuity." },
     ]);
   }, []);
 
@@ -225,61 +204,38 @@ export default function DashboardPage() {
     const tick = window.setInterval(() => {
       setStream((prev) => {
         const last = prev[prev.length - 1];
-        
-        // Use real data to drive simulated stream indicators
-        const drones = droneData?.drones ?? [];
-        const survivors = survivorData?.survivors ?? [];
-        
-        const offlineCount = drones.filter(d => d.status === "offline").length;
-        const lowBatCount = drones.filter(d => d.battery < 20).length;
-        const criticalSurvivors = survivors.filter(s => s.condition === "critical" && !s.rescued).length;
-        
-        // Latency: Simulated but influenced by active traffic
-        const latBase = 45 + (drones.length * 4);
-        const lat = clamp(latBase + (Math.random() * 12 - 6) + (offlineCount * 15), 34, 170);
-        
-        // Coverage: Faked to ~60% for demo purposes
-        const covBase = 61.2;
-        const cov = clamp(covBase + (Math.random() * 2.5 - 1.2), 58, 65);
-        
-        // Risk: Weighted sum of real world threats
-        const threats = (offlineCount * 22) + (lowBatCount * 12) + (criticalSurvivors * 18);
-        const risk = clamp(threats + (Math.random() * 10 - 5) + 12, 8, 99);
-        
-        const actDronesCount = drones.length - offlineCount;
-
+        const lat  = clamp(last.latencyMs + (Math.random() * 16 - 8) + (Math.random() > 0.93 ? 38 : 0), 34, 170);
+        const cov  = clamp(last.coverage + Math.random() * 0.75, 0, 98.6);
+        const act  = lat > 120 ? 4 : 5;
+        const risk = clamp((lat - 40) * 0.82 + (5 - act) * 16 + (Math.random() * 6 - 3), 8, 99);
         return [
           ...prev.slice(-(MAX_POINTS - 1)),
           {
             time: formatClock(Date.now()),
             latencyMs: Math.round(lat),
             coverage: Number(cov.toFixed(1)),
-            activeDrones: actDronesCount || 0,
+            activeDrones: act,
             risk: Number(risk.toFixed(1)),
           },
         ];
       });
-    }, 2000);
+    }, 1800);
     return () => window.clearInterval(tick);
-  }, [droneData, survivorData]);
+  }, []);
 
-  // ── Anomaly alert integration ──
+  // ── Latency anomaly events ──
   useEffect(() => {
     const last = stream[stream.length - 1];
-    if (!last || last.latencyMs <= 110) return;
-    setEvents((prev) => {
-      const exists = prev.some(e => e.text.includes("Latency anomaly"));
-      if (exists) return prev;
-      return [
-        {
-          id: `anomaly-${Date.now()}`,
-          ts: last.time,
-          level: "WARN",
-          text: `Performance degradation: RTT exceeded ${last.latencyMs} ms. Network congestion warning.`,
-        },
-        ...prev.slice(0, 10),
-      ];
-    });
+    if (!last || last.latencyMs <= 120) return;
+    setEvents((prev) => [
+      {
+        id: crypto.randomUUID(),
+        ts: last.time,
+        level: "WARN",
+        text: `Latency anomaly ${last.latencyMs} ms. Prioritising command channel.`,
+      },
+      ...prev.slice(0, 5),
+    ]);
   }, [stream]);
 
   // ── Derived values ──

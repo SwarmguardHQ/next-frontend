@@ -330,7 +330,7 @@ function FleetCard({ drone, onClick }: { drone: Drone; onClick: () => void }) {
 function CameraFeed({ drone, telemetry }: { drone: Drone; telem: typeof generateTelemetry; telemetry: ReturnType<typeof generateTelemetry> }) {
     const flying = isFlying(drone.status);
     const offline = drone.status === "offline";
-    const videoSrc = ["DRONE_BRAVO", "DRONE_DELTA"].includes(drone.drone_id) ? "/drone-feed2.mp4" : "/drone-feed1.mp4";
+    const videoSrc = drone.drone_id === "D2" ? "/drone-feed2.mp4" : "/drone-feed1.mp4";
 
     return (
         <div className="relative w-full h-full bg-slate-900 overflow-hidden rounded-xl border border-slate-800">
@@ -677,25 +677,15 @@ export default function DroneFleetPage() {
     useEffect(() => {
         const fetch = async () => {
             try {
-                const apiRes = await api.world.getDrones();
-                const demoMapping = ["DRONE_ALPHA", "DRONE_BRAVO", "DRONE_CHARLIE", "DRONE_DELTA", "DRONE_ECHO"];
-                const demoStatuses = ["scanning", "flying", "charging", "flying", "scanning"];
-
-                const resDrones = apiRes.drones.map((d, i) => ({
-                    ...d,
-                    drone_id: demoMapping[i] || d.drone_id,
-                    status: demoStatuses[i] || d.status,
-                    // keep real battery and position
-                }));
-
-                const dronesWithSensors: Drone[] = resDrones.map((d: any) => ({
+                const res = await api.world.getDrones();
+                const dronesWithSensors: Drone[] = res.drones.map((d) => ({
                     ...d,
                     sensors: d.sensors?.length ? d.sensors : [
                         { type: "visual", status: d.battery < 10 ? "damaged" : "active", value: "4K/60fps" },
                         { type: "thermal", status: d.battery < 10 ? "offline" : "active", value: "FLIR Boson" },
                         { type: "audio", status: "not_installed", value: "N/A" }
                     ]
-                }));
+                } as any));
                 setDrones(dronesWithSensors);
                 // Update selected drone data if in showcase
                 setSelected((prev) => prev ? dronesWithSensors.find((d) => d.drone_id === prev.drone_id) ?? prev : null);

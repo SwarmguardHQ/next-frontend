@@ -78,7 +78,7 @@ function safeSurvivors(input: Survivor[]): Survivor[] {
 function createDemoState() {
   const drones: Drone[] = [
     {
-      drone_id: "DRONE_ALPHA",
+      drone_id: "drone_1",
       position: { x: 10, y: 4 },
       battery: 87,
       status: "scanning",
@@ -87,7 +87,7 @@ function createDemoState() {
       last_seen: new Date().toISOString(),
     },
     {
-      drone_id: "DRONE_BRAVO",
+      drone_id: "drone_2",
       position: { x: 2, y: 18 },
       battery: 38,
       status: "flying",
@@ -96,7 +96,7 @@ function createDemoState() {
       last_seen: new Date().toISOString(),
     },
     {
-      drone_id: "DRONE_CHARLIE",
+      drone_id: "drone_3",
       position: { x: 0, y: 0 },
       battery: 18,
       status: "charging",
@@ -105,7 +105,7 @@ function createDemoState() {
       last_seen: new Date().toISOString(),
     },
     {
-      drone_id: "DRONE_DELTA",
+      drone_id: "drone_4",
       position: { x: 18, y: 3 },
       battery: 92,
       status: "flying",
@@ -114,7 +114,7 @@ function createDemoState() {
       last_seen: new Date().toISOString(),
     },
     {
-      drone_id: "DRONE_ECHO",
+      drone_id: "drone_5",
       position: { x: 11, y: 9 },
       battery: 61,
       status: "scanning",
@@ -159,11 +159,12 @@ function moveDemoDrones(previous: Drone[]): Drone[] {
     const dir = dirs[(idx + Math.floor(Date.now() / POLL_MS)) % dirs.length];
     const nx = clamp(drone.position.x + dir.x, 0, GRID_SIZE - 1);
     const ny = clamp(drone.position.y + dir.y, 0, GRID_SIZE - 1);
-    // REMOVED: battery simulation logic (now driven by API)
+    const nextBattery = clamp(drone.battery - (drone.status === "scanning" ? 1.2 : 0.7), 8, 100);
     return {
       ...drone,
       position: { x: nx, y: ny },
-      status: drone.battery <= 20 ? "returning" : drone.status,
+      battery: Number(nextBattery.toFixed(1)),
+      status: nextBattery <= 20 ? "returning" : drone.status,
       last_seen: new Date().toISOString(),
     };
   });
@@ -200,26 +201,38 @@ export default function SimulationMapPage() {
   }, []);
 
   useEffect(() => {
-    // Force demo mode but pull real battery data
-    setMode("demo");
-    const interval = window.setInterval(async () => {
-      let realBatteries: number[] = [];
-      try {
-        const res = await api.world.getDrones();
-        realBatteries = res.drones.map(d => d.battery);
-      } catch (e) {
-        console.error("Map fetch failed, fallback to demo battery", e);
-      }
+    let mounted = true;
 
-      setState((prevState) => ({
-        ...prevState,
-        drones: moveDemoDrones(prevState.drones).map((d, i) => ({
-          ...d,
-          battery: realBatteries[i] ?? d.battery // Use real battery if available
-        })),
-      }));
-    }, POLL_MS);
+    const poll = async () => {
+      try {
+        const [dRes, sRes] = await Promise.all([api.world.getDrones(), api.world.getSurvivors()]);
+        if (!mounted) return;
+        setState({
+          drones: safeDrones(dRes.drones ?? []),
+          survivors: safeSurvivors(sRes.survivors ?? []),
+        });
+        setMode("live");
+        setFailCount(0);
+      } catch {
+        if (!mounted) return;
+        setFailCount((prev) => {
+          const next = prev + 1;
+          if (next >= FAILURE_THRESHOLD) {
+            setMode("demo");
+            setState((prevState) => ({
+              ...prevState,
+              drones: moveDemoDrones(prevState.drones),
+            }));
+          }
+          return next;
+        });
+      }
+    };
+
+    poll();
+    const interval = window.setInterval(poll, POLL_MS);
     return () => {
+      mounted = false;
       window.clearInterval(interval);
     };
   }, []);
@@ -370,8 +383,8 @@ export default function SimulationMapPage() {
                                 d.status === "offline" ? "rotate-180" : ""
                               }`}
                             />
-                            <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[9px] whitespace-nowrap font-semibold text-slate-300">
-                              {d.drone_id.replace(/^(drone_|DRONE_)/, "")}
+                            <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[8px] font-semibold text-slate-300">
+                              {d.drone_id.replace("drone_", "D")}
                             </span>
                           </div>
                         ))}
