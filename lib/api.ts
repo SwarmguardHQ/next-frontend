@@ -70,6 +70,7 @@ export class ApiClient {
 // Pre-defined API functions based on backend domains
 import type {
   WorldMapResponse,
+  WorldMetricsResponse,
   DronesResponse,
   SurvivorsResponse,
   MeshLogResponse,
@@ -85,6 +86,7 @@ import type {
 export const api = {
   world: {
     getMap: () => ApiClient.get<WorldMapResponse>("/world/map"),
+    getMetrics: () => ApiClient.get<WorldMetricsResponse>("/world/metrics"),
     getDrones: () => ApiClient.get<DronesResponse>("/world/drones"),
     getSurvivors: () => ApiClient.get<SurvivorsResponse>("/world/survivors"),
     getMeshLog: () => ApiClient.get<MeshLogResponse>("/world/mesh-log"),

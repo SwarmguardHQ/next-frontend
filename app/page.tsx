@@ -45,7 +45,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api } from "@/lib/api";
-import type { DronesResponse, SurvivorsResponse } from "@/types/api_types";
+import type {
+  DronesResponse,
+  SurvivorsResponse,
+  WorldMetricsResponse,
+} from "@/types/api_types";
 
 // ─── Stream types ──────────────────────────────────────────────────────────────
 type StreamPoint = {
@@ -159,6 +163,7 @@ export default function DashboardPage() {
   // Live drone data from API
   const [droneData, setDroneData] = useState<DronesResponse | null>(null);
   const [survivorData, setSurvivorData] = useState<SurvivorsResponse | null>(null);
+  const [worldMetrics, setWorldMetrics] = useState<WorldMetricsResponse | null>(null);
   const [apiLoading, setApiLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -172,11 +177,34 @@ export default function DashboardPage() {
     let alive = true;
     const fetch_ = async () => {
       try {
-        const [dRes, sRes] = await Promise.all([
+        const metricsPromise = api.world.getMetrics().catch(() => null);
+        const [dRes, sRes, mRes, metricsRes] = await Promise.all([
           api.world.getDrones(),
           api.world.getSurvivors(),
+          api.world.getMeshLog(),
+          metricsPromise,
         ]);
-        if (alive) { setDroneData(dRes); setSurvivorData(sRes); setApiError(null); }
+        if (alive) {
+          setDroneData(dRes);
+          setSurvivorData(sRes);
+          if (metricsRes) setWorldMetrics(metricsRes);
+          // Map mesh logs to events only if there are active logs
+          if (mRes.mesh_log && mRes.mesh_log.length > 0) {
+            const mEvents: EventLog[] = mRes.mesh_log.slice(-12).reverse().map((msg, i) => ({
+              id: `m-${i}`,
+              ts: formatClock(Date.now() - i * 1000), // Approximate timestamp
+              level: msg.includes("CRITICAL") || msg.includes("LOW") ? "ACTION"
+                     : msg.includes("detected") ? "OBS" : "WARN",
+              text: msg,
+            }));
+            setEvents((prev) => {
+              // Try to merge existing demo events if real list is short
+              if (mEvents.length < 3) return [...mEvents, ...prev.slice(0, 3)].slice(0, 12);
+              return mEvents;
+            });
+          }
+          setApiError(null);
+        }
       } catch (e: any) {
         if (alive) setApiError(e.message || "Backend unreachable.");
       } finally {
@@ -204,24 +232,45 @@ export default function DashboardPage() {
     const tick = window.setInterval(() => {
       setStream((prev) => {
         const last = prev[prev.length - 1];
-        const lat  = clamp(last.latencyMs + (Math.random() * 16 - 8) + (Math.random() > 0.93 ? 38 : 0), 34, 170);
-        const cov  = clamp(last.coverage + Math.random() * 0.75, 0, 98.6);
-        const act  = lat > 120 ? 4 : 5;
-        const risk = clamp((lat - 40) * 0.82 + (5 - act) * 16 + (Math.random() * 6 - 3), 8, 99);
+        
+        // Use real data to drive simulated stream indicators
+        const drones = droneData?.drones ?? [];
+        const survivors = survivorData?.survivors ?? [];
+        
+        const offlineCount = drones.filter(d => d.status === "offline").length;
+        const lowBatCount = drones.filter(d => d.battery < 20).length;
+        const criticalSurvivors = survivors.filter(s => s.condition === "critical" && !s.rescued).length;
+        
+        // Latency: Simulated but influenced by active traffic
+        const latBase = 45 + (drones.length * 4);
+        const lat = clamp(latBase + (Math.random() * 12 - 6) + (offlineCount * 15), 34, 170);
+        
+        // Coverage: live grid exploration from backend when available
+        const cov =
+          worldMetrics != null
+            ? clamp(Number(worldMetrics.coverage_pct), 0, 100)
+            : clamp(38 + (prev.length * 0.46) % 30 + Math.cos(prev.length / 7) * 1.3, 0, 99);
+        
+        // Risk: Weighted sum of real world threats
+        const threats = (offlineCount * 22) + (lowBatCount * 12) + (criticalSurvivors * 18);
+        const risk = clamp(threats + (Math.random() * 10 - 5) + 12, 8, 99);
+        
+        const actDronesCount = drones.length - offlineCount;
+
         return [
           ...prev.slice(-(MAX_POINTS - 1)),
           {
             time: formatClock(Date.now()),
             latencyMs: Math.round(lat),
             coverage: Number(cov.toFixed(1)),
-            activeDrones: act,
+            activeDrones: actDronesCount || 0,
             risk: Number(risk.toFixed(1)),
           },
         ];
       });
     }, 1800);
     return () => window.clearInterval(tick);
-  }, []);
+  }, [droneData, survivorData, worldMetrics]);
 
   // ── Latency anomaly events ──
   useEffect(() => {
