@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import DeckGL from "@deck.gl/react";
 import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { PickingInfo } from "@deck.gl/core";
@@ -118,8 +118,11 @@ const BUILDING_LAYER_SPEC = {
 };
 
 export default function SimulationMap3D({ drones, survivors, pulse }: Props) {
+  const [mounted, setMounted] = useState(false);
   const [selected, setSelected] = useState<SelectedObject>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const handleMapLoad = useCallback((evt: MapLoadEvt) => {
     const { target: map } = evt;
@@ -279,6 +282,8 @@ export default function SimulationMap3D({ drones, survivors, pulse }: Props) {
       sizeUnits: "pixels",
     }),
   ], [drones, survivors, pulse]);
+
+  if (!mounted) return null;
 
   if (!TOKEN) {
     return (

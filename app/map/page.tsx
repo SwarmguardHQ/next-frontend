@@ -108,7 +108,7 @@ export default function MergeCollapsePage() {
 
     fetchMap();
     fetchMissions();
-    const mapId = setInterval(fetchMap, 1800);
+    const mapId = setInterval(fetchMap, 800);      // tighter poll for live feel
     const missionId = setInterval(fetchMissions, 5000);
     return () => { clearInterval(mapId); clearInterval(missionId); };
   }, []);
@@ -201,7 +201,7 @@ export default function MergeCollapsePage() {
       
       {/* ── Main Map Area ── */}
       <div className="flex-1 flex flex-col p-4 sm:p-6 transition-all duration-300">
-        <div className="flex flex-wrap items-center justify-between gap-3 shrink-0 mb-4 pr-14">
+        <div className="flex flex-wrap items-center justify-between gap-3 shrink-0 mb-2 pr-14">
           <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-wide text-white sm:text-3xl">
             <MapIcon className="h-7 w-7 text-sky-400" />
             Live Map & Operations
@@ -228,6 +228,36 @@ export default function MergeCollapsePage() {
             </Badge>
           </div>
         </div>
+
+        {/* Live Drone Fleet Strip */}
+        {drones.length > 0 && (
+          <div className="flex gap-2 flex-wrap shrink-0 mb-3">
+            {drones.map((drone) => {
+              const isOffline = drone.status === "offline";
+              const isLow = drone.battery <= 20;
+              return (
+                <div
+                  key={drone.drone_id}
+                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border font-mono text-[10px] ${
+                    isOffline
+                      ? "border-red-500/40 bg-red-500/10 text-red-300"
+                      : isLow
+                        ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                        : "border-sky-500/30 bg-sky-500/10 text-sky-300"
+                  }`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${
+                    isOffline ? "bg-red-500" : "bg-sky-400 animate-pulse"
+                  }`} />
+                  <span className="font-bold">{drone.drone_id.replace("drone_", "D").toUpperCase()}</span>
+                  <span className="text-slate-400">({drone.position.x},{drone.position.y})</span>
+                  <span className={isLow ? "text-red-400" : "text-slate-400"}>{drone.battery}%</span>
+                  <span className="capitalize text-slate-500">{drone.status}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex-1 flex gap-4 min-h-0">
           <Card className="flex-1 border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.18)] flex flex-col min-h-0">
