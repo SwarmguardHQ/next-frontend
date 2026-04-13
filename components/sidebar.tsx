@@ -44,10 +44,7 @@ export default function Sidebar() {
   const navItems = [
     { href: "/", icon: Home, label: "Dashboard" },
     { href: "/map", icon: Map, label: "Live Map" },
-    { href: "/missions", icon: Target, label: "Missions" },
-    // { href: "/drone-command", icon: Layers, label: "Human In Loop" },
     { href: "/fleet", icon: Cpu, label: "Drones" },
-    // { href: "/drones", icon: Cpu, label: "Drones" },
   ];
 
   return (
