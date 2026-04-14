@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { useWorldStream } from "@/lib/useWorldStream";
 import { Drone } from "@/types/api_types";
 import {
     ArrowLeft, Zap, Wind, Weight, Navigation, Cpu, Radio,
@@ -670,41 +670,33 @@ function ShowcaseView({ drone, onBack }: { drone: Drone; onBack: () => void }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+function attachDefaultSensors(d: Drone): Drone {
+    return {
+        ...d,
+        sensors: d.sensors?.length
+            ? d.sensors
+            : [
+                  { type: "visual", status: d.battery < 10 ? "damaged" : "active", value: "4K/60fps" },
+                  { type: "thermal", status: d.battery < 10 ? "offline" : "active", value: "FLIR Boson" },
+                  { type: "audio", status: "not_installed", value: "N/A" },
+              ],
+    };
+}
+
 export default function DroneFleetPage() {
     const [drones, setDrones] = useState<Drone[]>([]);
     const [selected, setSelected] = useState<Drone | null>(null);
 
+    const { droneData, worldStreamLive, apiError } = useWorldStream({ intervalMs: 500, pollingMs: 5000 });
+
     useEffect(() => {
-        const fetch = async () => {
-            try {
-                const apiRes = await api.world.getDrones();
-                const demoMapping = ["DRONE_ALPHA", "DRONE_BRAVO", "DRONE_CHARLIE", "DRONE_DELTA", "DRONE_ECHO"];
-                const demoStatuses = ["scanning", "flying", "charging", "flying", "scanning"];
-
-                const resDrones = apiRes.drones.map((d, i) => ({
-                    ...d,
-                    drone_id: demoMapping[i] || d.drone_id,
-                    status: demoStatuses[i] || d.status,
-                    // keep real battery and position
-                }));
-
-                const dronesWithSensors: Drone[] = resDrones.map((d: any) => ({
-                    ...d,
-                    sensors: d.sensors?.length ? d.sensors : [
-                        { type: "visual", status: d.battery < 10 ? "damaged" : "active", value: "4K/60fps" },
-                        { type: "thermal", status: d.battery < 10 ? "offline" : "active", value: "FLIR Boson" },
-                        { type: "audio", status: "not_installed", value: "N/A" }
-                    ]
-                }));
-                setDrones(dronesWithSensors);
-                // Update selected drone data if in showcase
-                setSelected((prev) => prev ? dronesWithSensors.find((d) => d.drone_id === prev.drone_id) ?? prev : null);
-            } catch (e) { console.error(e); }
-        };
-        fetch();
-        const id = setInterval(fetch, 3000);
-        return () => clearInterval(id);
-    }, []);
+        if (!droneData?.drones?.length) return;
+        const dronesWithSensors = droneData.drones.map(attachDefaultSensors);
+        setDrones(dronesWithSensors);
+        setSelected((prev) =>
+            prev ? dronesWithSensors.find((d) => d.drone_id === prev.drone_id) ?? prev : null,
+        );
+    }, [droneData]);
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden" style={{ height: "calc(100vh - 4rem)", background: "#060b14" }}>
@@ -719,6 +711,10 @@ export default function DroneFleetPage() {
                         </h1>
                         <p className="text-sm text-slate-500 mt-1">
                             {drones.filter((d) => isFlying(d.status)).length} active · {drones.length} registered units
+                            {" · "}
+                            <span className={worldStreamLive ? "text-emerald-400" : "text-amber-400/90"}>
+                                {worldStreamLive ? "WORLD SSE" : apiError ? "offline" : "REST"}
+                            </span>
                         </p>
                     </div>
                     {drones.length === 0 ? (

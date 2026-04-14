@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+
+import { useWorldStream } from "@/lib/useWorldStream";
 import dynamic from "next/dynamic";
 import {
   Activity,
@@ -15,8 +17,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { api } from "@/lib/api";
-import { Drone, Survivor } from "@/types/api_types";
+import type { Drone, Survivor, WorldStreamTickPayload } from "@/types/api_types";
 
 const SimulationMap3D = dynamic(
   () => import("@/components/map/SimulationMap3D"),
@@ -33,20 +34,18 @@ const SimulationMap3D = dynamic(
 );
 
 const GRID_SIZE = 20;
-const POLL_MS = 1800;
-const FAILURE_THRESHOLD = 3;
 
+/** Align with default ``mcp-backend`` scenario depots / chargers. */
 const CHARGING_STATIONS = [
   { id: "CS1", x: 0, y: 0 },
-  { id: "CS2", x: 19, y: 0 },
+  { id: "CS2", x: 9, y: 0 },
 ];
 
 const SUPPLY_DEPOTS = [
   { id: "D1", x: 0, y: 0 },
-  { id: "D2", x: 19, y: 19 },
+  { id: "D2", x: 9, y: 9 },
 ];
 
-type LiveMode = "live" | "demo";
 type ViewMode = "2d" | "3d";
 
 function clamp(value: number, min: number, max: number): number {
@@ -146,29 +145,6 @@ function createDemoState() {
   return { drones, survivors };
 }
 
-function moveDemoDrones(previous: Drone[]): Drone[] {
-  const dirs = [
-    { x: 0, y: 1 },
-    { x: 1, y: 0 },
-    { x: 0, y: -1 },
-    { x: -1, y: 0 },
-  ];
-
-  return previous.map((drone, idx) => {
-    if (drone.status === "offline" || drone.status === "charging") return drone;
-    const dir = dirs[(idx + Math.floor(Date.now() / POLL_MS)) % dirs.length];
-    const nx = clamp(drone.position.x + dir.x, 0, GRID_SIZE - 1);
-    const ny = clamp(drone.position.y + dir.y, 0, GRID_SIZE - 1);
-    // REMOVED: battery simulation logic (now driven by API)
-    return {
-      ...drone,
-      position: { x: nx, y: ny },
-      status: drone.battery <= 20 ? "returning" : drone.status,
-      last_seen: new Date().toISOString(),
-    };
-  });
-}
-
 function droneColor(status: string): string {
   if (status === "charging") return "text-emerald-400";
   if (status === "offline") return "text-red-500";
@@ -187,10 +163,32 @@ function survivorColor(s: Survivor): string {
 
 export default function SimulationMapPage() {
   const [{ drones, survivors }, setState] = useState(() => createDemoState());
-  const [mode, setMode] = useState<LiveMode>("live");
   const [viewMode, setViewMode] = useState<ViewMode>("2d");
-  const [failCount, setFailCount] = useState(0);
   const [pulse, setPulse] = useState(0);
+  const [simHeat, setSimHeat] = useState<number[][] | null>(null);
+  const [simMeta, setSimMeta] = useState<{
+    mesa_step: number;
+    mesa_coverage_pct: number;
+    confirmed_survivors: number;
+    pending_detections: number;
+  } | null>(null);
+
+  const { droneData, survivorData, worldStreamLive, apiError } = useWorldStream({
+    intervalMs: 500,
+    pollingMs: 5000,
+    onStreamTick: (p: WorldStreamTickPayload) => {
+      const v = p.sim_visual;
+      if (v?.heatmap?.length) setSimHeat(v.heatmap);
+      if (v) {
+        setSimMeta({
+          mesa_step: v.mesa_step,
+          mesa_coverage_pct: v.mesa_coverage_pct,
+          confirmed_survivors: v.confirmed_survivors,
+          pending_detections: v.pending_detections,
+        });
+      }
+    },
+  });
 
   useEffect(() => {
     const tick = window.setInterval(() => {
@@ -200,29 +198,15 @@ export default function SimulationMapPage() {
   }, []);
 
   useEffect(() => {
-    // Force demo mode but pull real battery data
-    setMode("demo");
-    const interval = window.setInterval(async () => {
-      let realBatteries: number[] = [];
-      try {
-        const res = await api.world.getDrones();
-        realBatteries = res.drones.map(d => d.battery);
-      } catch (e) {
-        console.error("Map fetch failed, fallback to demo battery", e);
-      }
-
-      setState((prevState) => ({
-        ...prevState,
-        drones: moveDemoDrones(prevState.drones).map((d, i) => ({
-          ...d,
-          battery: realBatteries[i] ?? d.battery // Use real battery if available
-        })),
-      }));
-    }, POLL_MS);
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, []);
+    if (!droneData?.drones?.length) return;
+    setState((prev) => ({
+      drones: safeDrones(droneData.drones),
+      survivors:
+        survivorData != null
+          ? safeSurvivors(survivorData.survivors)
+          : prev.survivors,
+    }));
+  }, [droneData, survivorData]);
 
   const cells = useMemo(() => {
     const list: { x: number; y: number }[] = [];
@@ -291,15 +275,15 @@ export default function SimulationMapPage() {
             <Radar className="h-3 w-3" />
             {viewMode === "2d" ? "SECTOR GRID 20×20" : "MAPBOX SAT · DECK.GL"}
           </Badge>
-          {mode === "live" ? (
+          {worldStreamLive ? (
             <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
               <Wifi className="h-3 w-3" />
-              LIVE STREAM
+              WORLD SSE
             </Badge>
           ) : (
             <Badge className="border border-amber-400/40 bg-amber-500/10 text-amber-300">
               <WifiOff className="h-3 w-3" />
-              DEMO MODE
+              {apiError ? "DEMO / OFFLINE" : "REST FALLBACK"}
             </Badge>
           )}
         </div>
@@ -330,11 +314,28 @@ export default function SimulationMapPage() {
                   const isCS = CHARGING_STATIONS.some((cs) => cs.x === cell.x && cs.y === cell.y);
                   const isDepot = SUPPLY_DEPOTS.some((d) => d.x === cell.x && d.y === cell.y);
 
+                  const heatVal =
+                    simHeat != null &&
+                    Array.isArray(simHeat[cell.y]) &&
+                    simHeat[cell.y][cell.x] != null &&
+                    Number.isFinite(simHeat[cell.y][cell.x])
+                      ? Number(simHeat[cell.y][cell.x])
+                      : null;
+
                   return (
                     <div
                       key={key}
                       className="group relative flex aspect-square items-center justify-center bg-slate-900 transition-colors hover:bg-slate-800"
                     >
+                      {heatVal != null && (
+                        <div
+                          className="pointer-events-none absolute inset-0 rounded-[2px]"
+                          style={{
+                            backgroundColor: `rgba(56, 189, 248, ${0.1 + heatVal * 0.45})`,
+                          }}
+                          aria-hidden
+                        />
+                      )}
                       {isCS && (
                         <BatteryCharging className="absolute left-1 top-1 h-3 w-3 text-emerald-800/80" />
                       )}
@@ -408,10 +409,21 @@ export default function SimulationMapPage() {
                 <span className="text-slate-300">Survivors Rescued</span>
                 <span className="tabular-nums text-sky-300">{rescuedSurvivors}</span>
               </div>
+              {simMeta && worldStreamLive && (
+                <div className="mt-2 space-y-1 rounded-md border border-sky-500/25 bg-sky-950/30 p-2 font-mono text-[10px] text-sky-200/90">
+                  <div>Mesa step {simMeta.mesa_step}</div>
+                  <div>
+                    Coverage {simMeta.mesa_coverage_pct.toFixed(1)}% · Confirmed{" "}
+                    {simMeta.confirmed_survivors} · Pending {simMeta.pending_detections}
+                  </div>
+                </div>
+              )}
               <div className="mt-2 rounded-md border border-slate-700/80 bg-slate-900/40 p-2 text-xs text-slate-300">
-                {mode === "live"
-                  ? "Operational uplink stable. Polling every 1.8s."
-                  : `Link degraded. Demo fallback active after ${failCount} failed fetch attempts.`}
+                {worldStreamLive
+                  ? "Live positions + optional thermal overlay from sim_visual when USE_MESA_SIM=1."
+                  : apiError
+                    ? "Backend unavailable — showing demo grid until connection returns."
+                    : "Using periodic REST until SSE connects."}
               </div>
             </CardContent>
           </Card>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -44,12 +44,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { api } from "@/lib/api";
-import type {
-  DronesResponse,
-  SurvivorsResponse,
-  WorldMetricsResponse,
-} from "@/types/api_types";
+import { useWorldStream } from "@/lib/useWorldStream";
 
 // ─── Stream types ──────────────────────────────────────────────────────────────
 type StreamPoint = {
@@ -161,61 +156,37 @@ const SECTOR_DATA = [
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  // Live drone data from API
-  const [droneData, setDroneData] = useState<DronesResponse | null>(null);
-  const [survivorData, setSurvivorData] = useState<SurvivorsResponse | null>(null);
-  const [worldMetrics, setWorldMetrics] = useState<WorldMetricsResponse | null>(null);
-  const [apiLoading, setApiLoading] = useState(true);
-  const [apiError, setApiError] = useState<string | null>(null);
-
-  // Telemetry stream state
+  // Telemetry stream state (charts)
   const [stream, setStream] = useState<StreamPoint[]>(() => createSeedPoints());
   const [events, setEvents] = useState<EventLog[]>([]);
   const [mounted, setMounted] = useState(false);
 
-  // ── API polling ──
-  useEffect(() => {
-    let alive = true;
-    const fetch_ = async () => {
-      try {
-        const metricsPromise = api.world.getMetrics().catch(() => null);
-        const [dRes, sRes, mRes, metricsRes] = await Promise.all([
-          api.world.getDrones(),
-          api.world.getSurvivors(),
-          api.world.getMeshLog(),
-          metricsPromise,
-        ]);
-        if (alive) {
-          setDroneData(dRes);
-          setSurvivorData(sRes);
-          if (metricsRes) setWorldMetrics(metricsRes);
-          // Map mesh logs to events only if there are active logs
-          if (mRes.mesh_log && mRes.mesh_log.length > 0) {
-            const mEvents: EventLog[] = mRes.mesh_log.slice(-12).reverse().map((msg, i) => ({
-              id: `m-${i}`,
-              ts: formatClock(Date.now() - i * 1000), // Approximate timestamp
-              level: msg.includes("CRITICAL") || msg.includes("LOW") ? "ACTION"
-                     : msg.includes("detected") ? "OBS" : "WARN",
-              text: msg,
-            }));
-            setEvents((prev) => {
-              // Try to merge existing demo events if real list is short
-              if (mEvents.length < 3) return [...mEvents, ...prev.slice(0, 3)].slice(0, 12);
-              return mEvents;
-            });
-          }
-          setApiError(null);
-        }
-      } catch (e: any) {
-        if (alive) setApiError(e.message || "Backend unreachable.");
-      } finally {
-        if (alive) setApiLoading(false);
-      }
-    };
-    fetch_();
-    const id = setInterval(fetch_, 5000);
-    return () => { alive = false; clearInterval(id); };
+  const applyMeshTailToEvents = useCallback((meshTail: string[]) => {
+    if (!meshTail.length) return;
+    const mEvents: EventLog[] = meshTail.slice(-12).reverse().map((msg, i) => ({
+      id: `m-${Date.now()}-${i}`,
+      ts: formatClock(Date.now() - i * 500),
+      level:
+        msg.includes("CRITICAL") || msg.includes("LOW")
+          ? "ACTION"
+          : msg.toLowerCase().includes("detect")
+            ? "OBS"
+            : "WARN",
+      text: msg,
+    }));
+    setEvents((prev) => {
+      if (mEvents.length < 3) return [...mEvents, ...prev.slice(0, 3)].slice(0, 12);
+      return mEvents;
+    });
   }, []);
+
+  const { droneData, survivorData, worldMetrics, worldStreamLive, apiError, apiLoading } =
+    useWorldStream({
+      onPollMeshLog: applyMeshTailToEvents,
+      onStreamTick: (data) => {
+        if (data.mesh_log?.length) applyMeshTailToEvents(data.mesh_log);
+      },
+    });
 
   // ── Telemetry mount ──
   useEffect(() => {
@@ -364,8 +335,15 @@ export default function DashboardPage() {
           <p className="text-xs tracking-widest text-slate-400 uppercase">Real-time fleet intelligence & mission analytics</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge className="border border-emerald-400/40 bg-emerald-500/10 text-emerald-300">
-            <Wifi className="h-3 w-3" /> LIVE LINK
+          <Badge
+            className={
+              worldStreamLive
+                ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
+                : "border border-slate-500/40 bg-slate-500/10 text-slate-400"
+            }
+          >
+            <Wifi className="h-3 w-3" />{" "}
+            {worldStreamLive ? "WORLD SSE" : "WORLD · REST fallback"}
           </Badge>
           <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
             <Radar className="h-3 w-3" /> OFFLINE CAPABLE

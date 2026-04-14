@@ -79,6 +79,28 @@ export interface MeshLogResponse {
   total_entries: number;
 }
 
+/** Optional Mesa layer on stream ticks when ``USE_MESA_SIM=1`` */
+export interface WorldStreamSimVisual {
+  heatmap: number[][];
+  mesa_step: number;
+  mesa_coverage_pct: number;
+  confirmed_survivors: number;
+  pending_detections: number;
+}
+
+/** One SSE ``tick`` payload from ``GET /world/stream`` */
+export interface WorldStreamTickPayload {
+  ts: string;
+  drones: Drone[];
+  summary: SwarmSummary;
+  metrics: WorldMetricsResponse;
+  survivors: SurvivorsResponse;
+  /** Recent mesh lines (tail); not full ``/world/mesh-log`` */
+  mesh_log: string[];
+  /** Normalized thermal grid + Mesa counters (null without ``USE_MESA_SIM``) */
+  sim_visual: WorldStreamSimVisual | null;
+}
+
 export interface Scenario {
   name: string;
   prompt_preview?: string;

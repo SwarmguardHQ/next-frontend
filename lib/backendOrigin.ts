@@ -17,3 +17,10 @@ export function getBackendOrigin(): string {
   }
   return "http://127.0.0.1:8000";
 }
+
+/** Direct FastAPI URL for world SSE (bypass Next ``/api`` rewrite). */
+export function getWorldStreamUrl(intervalMs = 500): string {
+  const u = new URL("/world/stream", `${getBackendOrigin()}/`);
+  u.searchParams.set("interval_ms", String(intervalMs));
+  return u.toString();
+}
