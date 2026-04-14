@@ -128,13 +128,3 @@
   }
 }
 
-@media (min-width: 640px) {
-  .app-content {
-    padding-left: 12rem;
-    transition: padding-left 180ms ease;
-  }
-
-  html[data-sidebar="collapsed"] .app-content {
-    padding-left: 4.5rem;
-  }
-}

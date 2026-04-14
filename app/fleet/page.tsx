@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
+import Header from "@/components/header";
+
 // ─── Static fleet metadata (merges with live API data) ───────────────────────
 
 const FLEET_META: Record<string, {
@@ -330,7 +332,7 @@ function FleetCard({ drone, onClick }: { drone: Drone; onClick: () => void }) {
 function CameraFeed({ drone, telemetry }: { drone: Drone; telem: typeof generateTelemetry; telemetry: ReturnType<typeof generateTelemetry> }) {
     const flying = isFlying(drone.status);
     const offline = drone.status === "offline";
-    const videoSrc = ["DRONE_BRAVO", "DRONE_DELTA"].includes(drone.drone_id) ? "/drone-feed2.mp4" : "/drone-feed1.mp4";
+    const videoSrc = drone.drone_id === "D2" ? "/drone-feed2.mp4" : "/drone-feed1.mp4";
 
     return (
         <div className="relative w-full h-full bg-slate-900 overflow-hidden rounded-xl border border-slate-800">
@@ -690,6 +692,26 @@ export default function DroneFleetPage() {
     const { droneData, worldStreamLive, apiError } = useWorldStream({ intervalMs: 500, pollingMs: 5000 });
 
     useEffect(() => {
+        const fetch = async () => {
+            try {
+                const res = await api.world.getDrones();
+                const dronesWithSensors: Drone[] = res.drones.map((d) => ({
+                    ...d,
+                    sensors: d.sensors?.length ? d.sensors : [
+                        { type: "visual", status: d.battery < 10 ? "damaged" : "active", value: "4K/60fps" },
+                        { type: "thermal", status: d.battery < 10 ? "offline" : "active", value: "FLIR Boson" },
+                        { type: "audio", status: "not_installed", value: "N/A" }
+                    ]
+                } as any));
+                setDrones(dronesWithSensors);
+                // Update selected drone data if in showcase
+                setSelected((prev) => prev ? dronesWithSensors.find((d) => d.drone_id === prev.drone_id) ?? prev : null);
+            } catch (e) { console.error(e); }
+        };
+        fetch();
+        const id = setInterval(fetch, 3000);
+        return () => clearInterval(id);
+    }, []);
         if (!droneData?.drones?.length) return;
         const dronesWithSensors = droneData.drones.map(attachDefaultSensors);
         setDrones(dronesWithSensors);
@@ -699,17 +721,19 @@ export default function DroneFleetPage() {
     }, [droneData]);
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden" style={{ height: "calc(100vh - 4rem)", background: "#060b14" }}>
+        <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-hidden">
+            <Header />
+            <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "#060b14" }}>
             {selected ? (
                 <ShowcaseView drone={selected} onBack={() => setSelected(null)} />
             ) : (
                 <div className="flex flex-col h-full overflow-y-auto">
                     <div className="px-6 pt-8 pb-6 shrink-0">
-                        <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-slate-600 mb-2">Ground Control · Fleet Registry</p>
-                        <h1 className="text-4xl font-bold tracking-tighter text-slate-100" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                        <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-cyan-400 mb-2">Ground Control · Fleet Registry</p>
+                        <h1 className="text-4xl font-bold tracking-tighter text-slate-100 uppercase" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                             Drone Fleet
                         </h1>
-                        <p className="text-sm text-slate-500 mt-1">
+                        <p className="text-sm text-cyan-500/70 mt-1">
                             {drones.filter((d) => isFlying(d.status)).length} active · {drones.length} registered units
                             {" · "}
                             <span className={worldStreamLive ? "text-emerald-400" : "text-amber-400/90"}>
@@ -733,6 +757,7 @@ export default function DroneFleetPage() {
                     </div>
                 </div>
             )}
+            </div>
         </div>
     );
 }

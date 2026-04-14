@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import DeckGL from "@deck.gl/react";
-import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
+import { ScatterplotLayer, TextLayer, PathLayer, ColumnLayer, IconLayer } from "@deck.gl/layers";
 import type { PickingInfo } from "@deck.gl/core";
 import Map, { NavigationControl } from "react-map-gl/mapbox";
 import type { Drone, Survivor } from "@/types/api_types";
@@ -12,10 +12,8 @@ const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 const MAP_STYLE = "mapbox://styles/mapbox/satellite-streets-v12";
 
 // Kuala Lumpur suburban disaster zone — mixed terrain + buildings on satellite
-const MISSION_CENTER: [number, number] = [101.7125, 3.157]; // [lng, lat]
+const MISSION_CENTER: [number, number] = [100.303163, 5.356944]; // [lng, lat]
 const CELL_DEG = 0.00042; // ~47 m per grid cell
-const GRID = 20;
-
 const INITIAL_VIEW = {
   longitude: MISSION_CENTER[0],
   latitude: MISSION_CENTER[1],
@@ -25,12 +23,6 @@ const INITIAL_VIEW = {
   maxPitch: 85,
 };
 
-// Convert grid (x, y) → real-world [lng, lat]
-function toCoord(x: number, y: number): [number, number] {
-  const lng = MISSION_CENTER[0] + (x - (GRID - 1) / 2) * CELL_DEG;
-  const lat = MISSION_CENTER[1] + (y - (GRID - 1) / 2) * CELL_DEG;
-  return [lng, lat];
-}
 
 type Color4 = [number, number, number, number];
 
@@ -39,10 +31,28 @@ type SelectedObject =
   | { kind: "survivor"; data: Survivor }
   | null;
 
+// Lucide HeartPulse SVG -> Data URI (White version for masking)
+const HEART_PULSE_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>'
+)}`;
+
+const ICON_MAPPING = {
+  heart: { x: 0, y: 0, width: 24, height: 24, mask: true },
+};
+
+interface InfraItem {
+  id: string;
+  x: number;
+  y: number;
+}
+
 interface Props {
   drones: Drone[];
   survivors: Survivor[];
   pulse: number;
+  gridSize: number;
+  chargingStations: InfraItem[];
+  supplyDepots: InfraItem[];
 }
 
 function droneColor(status: string): Color4 {
@@ -58,18 +68,22 @@ function droneGlowColor(status: string): Color4 {
 }
 
 function survivorFillColor(s: Survivor, pulse: number): Color4 {
-  if (!s.detected) return [100, 116, 139, 70];
-  if (s.rescued) return [125, 211, 252, 200];
-  if (s.condition === "critical") return pulse ? [255, 80, 80, 255] : [239, 68, 68, 180];
-  if (s.condition === "moderate") return [245, 158, 11, 220];
-  return [34, 197, 94, 220];
+  if (s.rescued) return [125, 211, 252, 230]; // Sky 300
+  if (!s.detected) return [148, 163, 184, 255]; // Slate 400 (Muted)
+  
+  if (s.condition === "critical") return pulse ? [255, 60, 60, 255] : [239, 68, 68, 220]; // Red 500
+  if (s.condition === "moderate") return [245, 158, 11, 240]; // Amber 500
+  if (s.condition === "stable") return [34, 197, 94, 240]; // Emerald 500
+  return [100, 116, 139, 220]; // Default Slate
 }
 
 function survivorLineColor(s: Survivor): Color4 {
-  if (!s.detected) return [100, 116, 139, 50];
-  if (s.condition === "critical") return [239, 68, 68, 200];
-  if (s.condition === "moderate") return [245, 158, 11, 160];
-  return [34, 197, 94, 160];
+  if (s.rescued) return [186, 230, 253, 255];
+  if (!s.detected) return [148, 163, 184, 180];
+  
+  if (s.condition === "critical") return [255, 100, 100, 255];
+  if (s.condition === "moderate") return [251, 191, 36, 255]; // Amber 400
+  return [74, 222, 128, 220]; // Emerald 400
 }
 
 function survivorLabelColor(s: Survivor): Color4 {
@@ -117,9 +131,42 @@ const BUILDING_LAYER_SPEC = {
   },
 };
 
-export default function SimulationMap3D({ drones, survivors, pulse }: Props) {
+export default function SimulationMap3D({
+  drones,
+  survivors,
+  pulse,
+  gridSize,
+  chargingStations,
+  supplyDepots,
+}: Props) {
+  const [mounted, setMounted] = useState(false);
   const [selected, setSelected] = useState<SelectedObject>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+
+  // Helper for dynamic coordinate conversion
+  const toCoord = useCallback((x: number, y: number): [number, number] => {
+    const lng = MISSION_CENTER[0] + (x - (gridSize - 1) / 2) * CELL_DEG;
+    const lat = MISSION_CENTER[1] + (y - (gridSize - 1) / 2) * CELL_DEG;
+    return [lng, lat];
+  }, [gridSize]);
+
+  // Generate tactical grid based on dynamic size
+  const gridLines = useMemo(() => {
+    const lines: { path: [number, number][] }[] = [];
+    const start = -0.5;
+    const end = gridSize - 0.5;
+    for (let x = 0; x <= gridSize; x++) {
+      const gx = x - 0.5;
+      lines.push({ path: [toCoord(gx, start), toCoord(gx, end)] });
+    }
+    for (let y = 0; y <= gridSize; y++) {
+      const gy = y - 0.5;
+      lines.push({ path: [toCoord(start, gy), toCoord(end, gy)] });
+    }
+    return lines;
+  }, [gridSize, toCoord]);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const handleMapLoad = useCallback((evt: MapLoadEvt) => {
     const { target: map } = evt;
@@ -130,28 +177,162 @@ export default function SimulationMap3D({ drones, survivors, pulse }: Props) {
   }, []);
 
   const layers = useMemo(() => [
+    // Tactical HUD Grid
+    new PathLayer({
+      id: "tactical-grid",
+      data: gridLines,
+      getPath: (d) => d.path,
+      getColor: [61, 158, 228, 255], // Subtle cyan with low alpha
+      getWidth: 1,
+      widthMinPixels: 0.5,
+      capRounded: true,
+      jointRounded: true,
+    }),
+
+    // ── Infrastructure: Charging Station glow (pulsing)
+    new ScatterplotLayer<InfraItem>({
+      id: "cs-glow",
+      data: chargingStations,
+      getPosition: (d) => toCoord(d.x, d.y),
+      getRadius: pulse ? 120 : 80,
+      radiusMinPixels: 25,
+      radiusMaxPixels: 80,
+      getFillColor: [34, 197, 94, pulse ? 70 : 40],
+      filled: true,
+      stroked: false,
+      updateTriggers: { getRadius: [pulse], getFillColor: [pulse] },
+    }),
+    new ColumnLayer<InfraItem>({
+      id: "cs-column",
+      data: chargingStations,
+      getPosition: (d) => toCoord(d.x, d.y),
+      diskResolution: 6, // Hexagonal base
+      radius: 20,
+      extruded: true,
+      getElevation: 20,
+      getFillColor: [34, 197, 94, 200],
+      getLineColor: [167, 243, 208, 255],
+      lineWidthMinPixels: 1,
+    }),
+    new TextLayer<InfraItem>({
+      id: "cs-labels",
+      data: chargingStations,
+      getPosition: (d) => toCoord(d.x, d.y),
+      getText: (d) => `⚡ CHARGING ${d.id.split("-").pop()}`,
+      getSize: 14,
+      getColor: [16, 185, 129, 255],
+      getTextAnchor: "middle",
+      getAlignmentBaseline: "center",
+      getPixelOffset: [0, -45],
+      fontFamily: "Barlow Condensed, sans-serif",
+      fontWeight: 800,
+      billboard: true,
+      sizeUnits: "pixels",
+    }),
+
+    // ── Infrastructure: Supply Depot glow (pulsing)
+    new ScatterplotLayer<InfraItem>({
+      id: "depot-glow",
+      data: supplyDepots,
+      getPosition: (d) => toCoord(d.x, d.y),
+      getRadius: pulse ? 120 : 80,
+      radiusMinPixels: 25,
+      radiusMaxPixels: 80,
+      getFillColor: [56, 189, 248, pulse ? 70 : 40],
+      filled: true,
+      stroked: false,
+      updateTriggers: { getRadius: [pulse], getFillColor: [pulse] },
+    }),
+    new ColumnLayer<InfraItem>({
+      id: "depot-column",
+      data: supplyDepots,
+      getPosition: (d) => toCoord(d.x, d.y),
+      diskResolution: 6, // Hexagonal base
+      radius: 20,
+      extruded: true,
+      getElevation: 20,
+      getFillColor: [14, 165, 233, 200],
+      getLineColor: [186, 230, 253, 255],
+      lineWidthMinPixels: 1,
+    }),
+    new TextLayer<InfraItem>({
+      id: "depot-labels",
+      data: supplyDepots,
+      getPosition: (d) => toCoord(d.x, d.y),
+      getText: (d) => `📦 DEPOT ${d.id.split("-").pop()}`,
+      getSize: 14,
+      getColor: [56, 189, 248, 255],
+      getTextAnchor: "middle",
+      getAlignmentBaseline: "center",
+      getPixelOffset: [0, -45],
+      fontFamily: "Barlow Condensed, sans-serif",
+      fontWeight: 800,
+      billboard: true,
+      sizeUnits: "pixels",
+    }),
+
     // Thermal heat bloom around detected survivors
     new ScatterplotLayer<Survivor>({
       id: "thermal-halos",
       data: survivors.filter((s) => s.detected),
       getPosition: (s) => toCoord(s.position.x, s.position.y),
-      getRadius: 130,
-      radiusMinPixels: 16,
-      radiusMaxPixels: 90,
+      getRadius: 140,
+      radiusMinPixels: 20,
+      radiusMaxPixels: 100,
       getFillColor: (s) =>
         s.condition === "critical"
-          ? [239, 68, 68, pulse ? 55 : 32]
-          : [245, 158, 11, 40],
+          ? [239, 68, 68, pulse ? 80 : 50]
+          : [245, 158, 11, 60],
       filled: true,
       stroked: false,
       updateTriggers: { getFillColor: [pulse] },
     }),
 
-    // Drone scanning radius rings (status = scanning)
+    // Survivor markers — Lucide HeartPulse Icons
+    new IconLayer<Survivor>({
+      id: "survivors",
+      data: survivors,
+      getPosition: (s) => toCoord(s.position.x, s.position.y),
+      iconAtlas: HEART_PULSE_SVG,
+      iconMapping: ICON_MAPPING,
+      getIcon: () => "heart",
+      sizeUnits: "pixels",
+      getSize: pulse ? 32 : 26,
+      getColor: (s) => survivorFillColor(s, pulse),
+      pickable: true,
+      updateTriggers: { getSize: [pulse], getColor: [pulse] },
+      onClick: (info: PickingInfo) => {
+        if (info.object) {
+          setSelected({ kind: "survivor", data: info.object as Survivor });
+          setTooltipPos({ x: info.x, y: info.y });
+        }
+      },
+    }),
+
+    // Survivor condition labels (show for all, dimmer for undetected)
+    new TextLayer<Survivor>({
+      id: "survivor-labels",
+      data: survivors,
+      getPosition: (s) => toCoord(s.position.x, s.position.y),
+      getText: (s) => s.detected ? s.condition.slice(0, 4).toUpperCase() : "?",
+      getSize: 11,
+      getColor: (s) => s.detected ? survivorLabelColor(s) : [148, 163, 184, 180] as Color4,
+      getTextAnchor: "middle",
+      getAlignmentBaseline: "center",
+      getPixelOffset: [0, 22],
+      fontFamily: "Barlow Condensed, sans-serif",
+      fontWeight: 700,
+      billboard: true,
+      sizeUnits: "pixels",
+    }),
+
+    // ── DRONES (Moved to end for Method 3) ──
+
+    // Drone scanning radius rings
     new ScatterplotLayer<Drone>({
       id: "scan-radius",
       data: drones.filter((d) => d.status === "scanning"),
-      getPosition: (d) => toCoord(d.position.x, d.position.y),
+      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 21],
       getRadius: 200,
       radiusMinPixels: 32,
       radiusMaxPixels: 130,
@@ -166,7 +347,7 @@ export default function SimulationMap3D({ drones, survivors, pulse }: Props) {
     new ScatterplotLayer<Drone>({
       id: "drone-glow",
       data: drones,
-      getPosition: (d) => toCoord(d.position.x, d.position.y),
+      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 21],
       getRadius: 38,
       radiusMinPixels: 12,
       radiusMaxPixels: 30,
@@ -175,22 +356,21 @@ export default function SimulationMap3D({ drones, survivors, pulse }: Props) {
       stroked: false,
     }),
 
-    // Drone body markers
-    new ScatterplotLayer<Drone>({
+    // Drone markers — Floating Tactical Triangle Pillars
+    new ColumnLayer<Drone>({
       id: "drones",
       data: drones,
-      getPosition: (d) => toCoord(d.position.x, d.position.y),
-      getRadius: 18,
-      radiusMinPixels: 7,
-      radiusMaxPixels: 20,
+      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 22],
+      diskResolution: 3, // Triangle
+      radius: 18,
+      extruded: true,
+      getElevation: 4, // Thickness of the hover disk
       getFillColor: (d) => droneColor(d.status),
       getLineColor: (d) => {
         const [r, g, b] = droneColor(d.status);
-        return [r, g, b, 120] as Color4;
+        return [r, g, b, 255] as Color4;
       },
-      lineWidthMinPixels: 1.5,
-      filled: true,
-      stroked: true,
+      lineWidthMinPixels: 1,
       pickable: true,
       onClick: (info: PickingInfo) => {
         if (info.object) {
@@ -200,12 +380,12 @@ export default function SimulationMap3D({ drones, survivors, pulse }: Props) {
       },
     }),
 
-    // Drone ID labels (above dot)
+    // Drone ID labels
     new TextLayer<Drone>({
       id: "drone-labels",
       data: drones,
-      getPosition: (d) => toCoord(d.position.x, d.position.y),
-      getText: (d) => d.drone_id.replace(/^(drone_|DRONE_)/, ""),
+      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 23],
+      getText: (d) => d.drone_id.replace("drone_", "D"),
       getSize: 12,
       getColor: [255, 255, 255, 220],
       getTextAnchor: "middle",
@@ -217,11 +397,11 @@ export default function SimulationMap3D({ drones, survivors, pulse }: Props) {
       sizeUnits: "pixels",
     }),
 
-    // Battery % sub-label (below drone dot)
+    // Battery % sub-label
     new TextLayer<Drone>({
       id: "drone-battery-labels",
       data: drones,
-      getPosition: (d) => toCoord(d.position.x, d.position.y),
+      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 23],
       getText: (d) => `${Math.round(d.battery)}%`,
       getSize: 10,
       getColor: (d) =>
@@ -238,47 +418,9 @@ export default function SimulationMap3D({ drones, survivors, pulse }: Props) {
       billboard: true,
       sizeUnits: "pixels",
     }),
+  ], [drones, survivors, pulse, gridSize, chargingStations, supplyDepots, toCoord]);
 
-    // Survivor markers
-    new ScatterplotLayer<Survivor>({
-      id: "survivors",
-      data: survivors,
-      getPosition: (s) => toCoord(s.position.x, s.position.y),
-      getRadius: 20,
-      radiusMinPixels: 6,
-      radiusMaxPixels: 18,
-      getFillColor: (s) => survivorFillColor(s, pulse),
-      getLineColor: (s) => survivorLineColor(s),
-      lineWidthMinPixels: 2,
-      filled: true,
-      stroked: true,
-      pickable: true,
-      updateTriggers: { getFillColor: [pulse] },
-      onClick: (info: PickingInfo) => {
-        if (info.object) {
-          setSelected({ kind: "survivor", data: info.object as Survivor });
-          setTooltipPos({ x: info.x, y: info.y });
-        }
-      },
-    }),
-
-    // Survivor condition labels
-    new TextLayer<Survivor>({
-      id: "survivor-labels",
-      data: survivors.filter((s) => s.detected),
-      getPosition: (s) => toCoord(s.position.x, s.position.y),
-      getText: (s) => s.condition.slice(0, 4).toUpperCase(),
-      getSize: 9,
-      getColor: (s) => survivorLabelColor(s),
-      getTextAnchor: "middle",
-      getAlignmentBaseline: "center",
-      getPixelOffset: [0, 18],
-      fontFamily: "Barlow Condensed, sans-serif",
-      fontWeight: 700,
-      billboard: true,
-      sizeUnits: "pixels",
-    }),
-  ], [drones, survivors, pulse]);
+  if (!mounted) return null;
 
   if (!TOKEN) {
     return (

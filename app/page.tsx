@@ -106,8 +106,7 @@ function createSeedPoints(): StreamPoint[] {
     const t = START_TIME + i * 2000;
     const anomaly = i === 33 ? 46 : 0;
     const lat = 52 + Math.sin(i / 5) * 9 + anomaly;
-    // Scale seed points so it ends up smoothly near 61%
-    const cov = 38 + i * 0.46 + Math.cos(i / 7) * 1.3;
+    const cov = 38 + i * 1.04 + Math.cos(i / 7) * 1.3;
     const active = i > 34 ? 4 : 5;
     const risk = lat > 90 ? 72 : 24 + Math.sin(i / 4) * 6;
     pts.push({
@@ -143,6 +142,8 @@ function getStatusColor(status: string) {
   }
 }
 
+import Header from "@/components/header";
+
 // ─── Static chart data ─────────────────────────────────────────────────────────
 const SECTOR_DATA = [
   { sector: "NW", completed: 16, pending: 2 },
@@ -161,6 +162,48 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<EventLog[]>([]);
   const [mounted, setMounted] = useState(false);
 
+  // ── API polling ──
+  useEffect(() => {
+    let alive = true;
+    const fetch_ = async () => {
+      try {
+        const metricsPromise = api.world.getMetrics().catch(() => null);
+        const [dRes, sRes, mRes, metricsRes] = await Promise.all([
+          api.world.getDrones(),
+          api.world.getSurvivors(),
+          api.world.getMeshLog(),
+          metricsPromise,
+        ]);
+        if (alive) {
+          setDroneData(dRes);
+          setSurvivorData(sRes);
+          if (metricsRes) setWorldMetrics(metricsRes);
+          // Map mesh logs to events only if there are active logs
+          if (mRes.mesh_log && mRes.mesh_log.length > 0) {
+            const mEvents: EventLog[] = mRes.mesh_log.slice(-12).reverse().map((msg, i) => ({
+              id: `m-${i}`,
+              ts: formatClock(Date.now() - i * 1000), // Approximate timestamp
+              level: msg.includes("CRITICAL") || msg.includes("LOW") ? "ACTION"
+                     : msg.includes("detected") ? "OBS" : "WARN",
+              text: msg,
+            }));
+            setEvents((prev) => {
+              // Try to merge existing demo events if real list is short
+              if (mEvents.length < 3) return [...mEvents, ...prev.slice(0, 3)].slice(0, 12);
+              return mEvents;
+            });
+          }
+          setApiError(null);
+        }
+      } catch (e: any) {
+        if (alive) setApiError(e.message || "Backend unreachable.");
+      } finally {
+        if (alive) setApiLoading(false);
+      }
+    };
+    fetch_();
+    const id = setInterval(fetch_, 3000);
+    return () => { alive = false; clearInterval(id); };
   const applyMeshTailToEvents = useCallback((meshTail: string[]) => {
     if (!meshTail.length) return;
     const mEvents: EventLog[] = meshTail.slice(-12).reverse().map((msg, i) => ({
@@ -180,6 +223,7 @@ export default function DashboardPage() {
     });
   }, []);
 
+  // ── Telemetry mount + seed events ──
   const { droneData, survivorData, worldMetrics, worldStreamLive, apiError, apiLoading } =
     useWorldStream({
       onPollMeshLog: applyMeshTailToEvents,
@@ -195,7 +239,7 @@ export default function DashboardPage() {
     setEvents([
       { id: "e1", ts: formatClock(now - 12000), level: "OBS",    text: "Mesh health nominal. Sector SW link budget stable at 82%." },
       { id: "e2", ts: formatClock(now - 8000),  level: "WARN",   text: "Relay R-3 interference burst detected. RTT exceeded 95 ms threshold." },
-      { id: "e3", ts: formatClock(now - 4000),  level: "ACTION", text: "Fallback route enabled. Drone ALPHA reassigned to maintain sweep continuity." },
+      { id: "e3", ts: formatClock(now - 4000),  level: "ACTION", text: "Fallback route enabled. Drone D3 reassigned to maintain sweep continuity." },
     ]);
   }, []);
 
@@ -240,27 +284,23 @@ export default function DashboardPage() {
           },
         ];
       });
-    }, 2000);
+    }, 1800);
     return () => window.clearInterval(tick);
   }, [droneData, survivorData, worldMetrics]);
 
-  // ── Anomaly alert integration ──
+  // ── Latency anomaly events ──
   useEffect(() => {
     const last = stream[stream.length - 1];
-    if (!last || last.latencyMs <= 110) return;
-    setEvents((prev) => {
-      const exists = prev.some(e => e.text.includes("Latency anomaly"));
-      if (exists) return prev;
-      return [
-        {
-          id: `anomaly-${Date.now()}`,
-          ts: last.time,
-          level: "WARN",
-          text: `Performance degradation: RTT exceeded ${last.latencyMs} ms. Network congestion warning.`,
-        },
-        ...prev.slice(0, 10),
-      ];
-    });
+    if (!last || last.latencyMs <= 120) return;
+    setEvents((prev) => [
+      {
+        id: crypto.randomUUID(),
+        ts: last.time,
+        level: "WARN",
+        text: `Latency anomaly ${last.latencyMs} ms. Prioritising command channel.`,
+      },
+      ...prev.slice(0, 5),
+    ]);
   }, [stream]);
 
   // ── Derived values ──
@@ -322,11 +362,13 @@ export default function DashboardPage() {
   }, [survivorData]);
 
   if (!mounted) {
-    return <div className="min-h-screen animate-pulse rounded-lg bg-[#0d1117]" />;
+    return <div className="fixed inset-0 z-[100] flex flex-col bg-black animate-pulse" />;
   }
 
   return (
-    <div className="flex-1 space-y-4 overflow-auto rounded-lg bg-[#0d1117] p-4 text-white sm:p-6">
+    <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-auto">
+      <Header />
+      <div className="flex-1 p-4 sm:p-6 space-y-4 max-w-[1600px] w-full mx-auto pb-24">
 
       {/* ── Header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -693,6 +735,7 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
+    </div>
     </div>
   );
 }

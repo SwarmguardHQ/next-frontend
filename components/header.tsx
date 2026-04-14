@@ -16,8 +16,11 @@ import {
   Map,
   Package,
   PanelLeft,
-  ShoppingCart,
   Cpu,
+  Settings,
+  User,
+  Bell,
+  Menu
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -29,91 +32,110 @@ export default function Header() {
   const pathname = usePathname();
 
   const navItems = [
-    { href: "/dashboard", icon: Home, label: "Dashboard" },
-      { href: "/map", icon: Map, label: "Live Map" },
-      { href: "/missions", icon: ShoppingCart, label: "Missions" },
-      { href: "/fleet", icon: Cpu, label: "Drones" },
-      // { href: "/drones", icon: Users2, label: "Drones" },
+    { href: "/", icon: Home, label: "HOME" },
+    { href: "/tactical", icon: LineChart, label: "MAP" },
+    { href: "/fleet", icon: Cpu, label: "FLEET" },
   ];
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
-      <Button
-        size="icon"
-        variant="outline"
-        className="hidden border-border bg-card text-foreground hover:bg-accent sm:inline-flex"
-        onClick={() => window.dispatchEvent(new Event("toggle-sidebar"))}
-      >
-        <PanelLeft className="h-5 w-5" />
-        <span className="sr-only">Toggle Sidebar</span>
-      </Button>
-      <Sheet>
-        <SheetTrigger asChild>
-          <Button size="icon" variant="outline" className="sm:hidden">
-            <PanelLeft className="h-5 w-5" />
-            <span className="sr-only">Toggle Menu</span>
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="sm:max-w-xs">
-          <nav className="grid gap-6 text-lg font-medium">
-            <Link
-              href="/"
-              className="flex items-center gap-2 rounded-md border border-sky-500/30 bg-slate-900/60 p-2"
-            >
-              <Image
-                src="/siren-logo-v2.png"
-                alt="SIREN"
-                width={28}
-                height={28}
-                className="rounded-sm"
-                style={{ width: "auto", height: "auto" }}
-              />
-              <span className="text-xs font-semibold tracking-wider text-slate-100">SIREN</span>
-            </Link>
+    <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-black/80 px-6 backdrop-blur-md">
+      <div className="flex items-center gap-4">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button size="icon" variant="ghost" className="md:hidden text-cyan-400 hover:text-cyan-300 hover:bg-cyan-950/50 border-cyan-900/50">
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Toggle Menu</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="sm:max-w-xs bg-slate-950 border-r border-cyan-900/50 text-slate-300">
+            <nav className="grid gap-6 text-lg font-medium font-mono mt-6">
+              <Link
+                href="/"
+                className="flex items-center gap-2 rounded-md border border-cyan-500/30 bg-cyan-950/40 p-2"
+              >
+                <div className="text-cyan-400">
+                  <Cpu className="h-6 w-6" />
+                </div>
+                <span className="text-sm font-bold tracking-widest text-cyan-400 uppercase drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]">
+                  SWARMGUARD
+                </span>
+              </Link>
 
-            {navItems.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-4 px-2.5 transition-colors",
-                    isActive 
-                      ? "text-foreground font-bold" 
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-        </SheetContent>
-      </Sheet>
-      <div className="relative ml-auto flex-1 md:grow-0"></div>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" className="overflow-hidden rounded-full">
-            <Avatar>
-              <AvatarImage
-                src="https://github.com/shadcn.png"
-                alt="@shadcn"
-              />
-              <AvatarFallback>CN</AvatarFallback>
-            </Avatar>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>My Account</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem>Settings</DropdownMenuItem>
-          <DropdownMenuItem>Support</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem>Logout</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+              {navItems.map((item) => {
+                const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== "/");
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-4 px-2.5 transition-colors uppercase tracking-widest",
+                      isActive 
+                        ? "text-cyan-400 font-bold" 
+                        : "text-slate-500 hover:text-cyan-300"
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </SheetContent>
+        </Sheet>
+        
+        <h1 className="text-xl font-bold tracking-widest text-cyan-400 uppercase drop-shadow-[0_0_10px_rgba(34,211,238,0.4)] hidden sm:block">
+          SWARMGUARD_HQ
+        </h1>
+      </div>
+
+      <nav className="hidden md:flex items-center gap-8 text-xs font-semibold tracking-widest text-slate-500 uppercase">
+        {navItems.map((item) => {
+          const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== "/");
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={cn(
+                "transition-colors pb-1 -mb-[1px]",
+                isActive
+                  ? "text-cyan-400 border-b-2 border-cyan-400"
+                  : "hover:text-cyan-400"
+              )}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="flex items-center gap-4 text-cyan-400">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="hover:text-white transition-colors focus:outline-none"><Settings className="w-5 h-5" /></button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="bg-slate-950 border-cyan-900/50 text-slate-300 font-mono text-xs">
+            <DropdownMenuLabel className="text-cyan-400 tracking-widest">SYSTEM_CONFIG</DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-cyan-900/30" />
+            <DropdownMenuItem className="hover:bg-cyan-950 hover:text-cyan-300 focus:bg-cyan-950 focus:text-cyan-300 cursor-pointer">PREFERENCES</DropdownMenuItem>
+            <DropdownMenuItem className="hover:bg-cyan-950 hover:text-cyan-300 focus:bg-cyan-950 focus:text-cyan-300 cursor-pointer">DIAGNOSTICS</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="hover:text-white transition-colors focus:outline-none"><User className="w-5 h-5" /></button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="bg-slate-950 border-cyan-900/50 text-slate-300 font-mono text-xs">
+            <DropdownMenuLabel className="text-cyan-400 tracking-widest">OPERATOR</DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-cyan-900/30" />
+            <DropdownMenuItem className="hover:bg-cyan-950 hover:text-cyan-300 focus:bg-cyan-950 focus:text-cyan-300 cursor-pointer">PROFILE</DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-cyan-900/30" />
+            <DropdownMenuItem className="hover:bg-cyan-950 hover:text-cyan-300 focus:bg-cyan-950 focus:text-cyan-300 cursor-pointer">LOGOUT_SESSION</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <button className="hover:text-white transition-colors"><Bell className="w-5 h-5" /></button>
+      </div>
     </header>
   );
 }

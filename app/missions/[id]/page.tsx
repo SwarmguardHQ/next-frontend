@@ -10,9 +10,17 @@ import { ChevronLeft, Terminal, Server, AlertOctagon, CheckCircle2, Activity } f
 import Link from "next/link";
 import type { MissionStatusResponse } from "@/types/api_types";
 import { getBackendOrigin } from "@/lib/backendOrigin";
+import { Wifi, WifiOff, Battery, BatteryWarning } from "lucide-react";
+
+export type DroneState = {
+  id: string;
+  name: string;
+  status: "online" | "offline" | "reassigning";
+  battery: number;
+};
 
 type LogEvent = {
-  id: number;
+  id: string | number;
   type: "log" | "step" | "error" | "complete";
   timestamp: string;
   message?: string;
@@ -30,6 +38,7 @@ export default function LiveMissionConsole() {
   const [status, setStatus] = useState<MissionStatusResponse | null>(null);
   const [logs, setLogs] = useState<LogEvent[]>([]);
   const [streamActive, setStreamActive] = useState(false);
+  const [drones, setDrones] = useState<DroneState[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom of terminal
@@ -45,8 +54,20 @@ export default function LiveMissionConsole() {
       try {
         const res = await api.missions.getStatus(missionId);
         setStatus(res);
+        
+        // Also fetch initial drone state from the world API
+        const worldRes = await api.world.getDrones();
+        if (worldRes.drones) {
+          const mappedDrones: DroneState[] = worldRes.drones.map((d: any) => ({
+            id: d.drone_id,
+            name: d.name || `Drone-${d.drone_id}`,
+            status: d.status as any,
+            battery: d.battery
+          }));
+          setDrones(mappedDrones);
+        }
       } catch (err) {
-        console.error("Failed to fetch mission status", err);
+        console.error("Failed to fetch mission status or drones", err);
       }
     };
     fetchStatus();
@@ -75,10 +96,10 @@ export default function LiveMissionConsole() {
       setLogs((prev) => [
         ...prev,
         {
-          id: Date.now() + Math.random(),
+          ...data,
+          id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           timestamp: new Date().toLocaleTimeString(),
           type,
-          ...data,
         } as LogEvent
       ]);
     };
@@ -95,10 +116,14 @@ export default function LiveMissionConsole() {
     });
 
     eventSource.addEventListener("error", (e) => {
-      const data = JSON.parse((e as MessageEvent).data);
-      handleEvent("error", data);
-      eventSource.close();
-      setStreamActive(false);
+      const msgEvent = e as MessageEvent;
+      if (!msgEvent.data || msgEvent.data === "undefined") return; // Skip empty or literal "undefined"
+      try {
+        const data = JSON.parse(msgEvent.data);
+        handleEvent("error", data);
+      } catch (err) {
+        console.error("Failed to parse error event data", err);
+      }
     });
 
     eventSource.addEventListener("complete", (e) => {
@@ -108,8 +133,21 @@ export default function LiveMissionConsole() {
       setStreamActive(false);
     });
 
+    // Listen for incoming drone status changes from the backend
+    eventSource.addEventListener("drone_update", (e) => {
+      try {
+        const data = JSON.parse((e as MessageEvent).data);
+        setDrones((prev) =>
+          prev.map((drone) => (drone.id === data.id ? { ...drone, ...data } : drone))
+        );
+      } catch (err) {
+        console.error("Failed to parse drone_update", err);
+      }
+    });
+
     // Fallback for types that might not be mapped specifically
     eventSource.onmessage = (e) => {
+      if (!e.data || e.data === "undefined") return;
       try {
         const data = JSON.parse(e.data);
         if (data.type && !["log", "step", "error", "complete"].includes(data.type)) {
@@ -121,22 +159,17 @@ export default function LiveMissionConsole() {
     };
 
     eventSource.onerror = (err) => {
-      console.error("SSE Error:", err);
-      eventSource.close();
+      console.warn("SSE stream encountered an interruption, attempting to reconnect...", err);
       setStreamActive(false);
     };
 
-    return () => {
-      eventSource.close();
-      setStreamActive(false);
-    };
   }, [missionId]);
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" asChild>
-          <Link href="/missions">
+          <Link href="/map">
             <ChevronLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -153,9 +186,10 @@ export default function LiveMissionConsole() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        {/* Mission Intel Sidebar */}
-        <Card className="md:col-span-1 h-fit">
-          <CardHeader>
+        {/* Sidebars */}
+        <div className="md:col-span-1 space-y-4">
+          <Card className="h-fit">
+            <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Server className="h-5 w-5" /> Mission Specs
             </CardTitle>
@@ -185,6 +219,8 @@ export default function LiveMissionConsole() {
             </div>
           </CardContent>
         </Card>
+
+        </div>
 
         {/* Live Terminal */}
         <Card className="md:col-span-2 bg-slate-950 text-green-400 border-slate-800 shadow-2xl flex flex-col" style={{ height: '600px' }}>
@@ -272,3 +308,4 @@ export default function LiveMissionConsole() {
     </div>
   );
 }
+
