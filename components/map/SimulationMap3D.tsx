@@ -182,7 +182,7 @@ export default function SimulationMap3D({
       id: "tactical-grid",
       data: gridLines,
       getPath: (d) => d.path,
-      getColor: [61, 158, 228, 126], // Subtle cyan with low alpha
+      getColor: [61, 158, 228, 255], // Subtle cyan with low alpha
       getWidth: 1,
       widthMinPixels: 0.5,
       capRounded: true,

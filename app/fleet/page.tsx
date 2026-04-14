@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
+import Header from "@/components/header";
+
 // ─── Static fleet metadata (merges with live API data) ───────────────────────
 
 const FLEET_META: Record<string, {
@@ -697,17 +699,19 @@ export default function DroneFleetPage() {
     }, []);
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden" style={{ height: "calc(100vh - 4rem)", background: "#060b14" }}>
+        <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-hidden">
+            <Header />
+            <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "#060b14" }}>
             {selected ? (
                 <ShowcaseView drone={selected} onBack={() => setSelected(null)} />
             ) : (
                 <div className="flex flex-col h-full overflow-y-auto">
                     <div className="px-6 pt-8 pb-6 shrink-0">
-                        <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-slate-600 mb-2">Ground Control · Fleet Registry</p>
-                        <h1 className="text-4xl font-bold tracking-tighter text-slate-100" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                        <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-cyan-400 mb-2">Ground Control · Fleet Registry</p>
+                        <h1 className="text-4xl font-bold tracking-tighter text-slate-100 uppercase" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                             Drone Fleet
                         </h1>
-                        <p className="text-sm text-slate-500 mt-1">
+                        <p className="text-sm text-cyan-500/70 mt-1">
                             {drones.filter((d) => isFlying(d.status)).length} active · {drones.length} registered units
                         </p>
                     </div>
@@ -727,6 +731,7 @@ export default function DroneFleetPage() {
                     </div>
                 </div>
             )}
+            </div>
         </div>
     );
 }

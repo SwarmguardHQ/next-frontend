@@ -35,7 +35,7 @@ const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 export const api = {
   world: {
     getMap: async () => { await delay(200); return {} as WorldMapResponse; },
-    getDrones: async () => { await delay(200); return { drones: [], summary: { total: 0, active: 0, offline: 0, charging: 0, low_battery: [] } } as DronesResponse; },
+    getDrones: async () => { await delay(200); return { drones: [], summary: { drones: {} as any, survivors: { total: 0, detected: 0, rescued: 0, critical_unrescued: 0 }, mission_complete: false } } as DronesResponse; },
     getSurvivors: async () => { await delay(200); return { survivors: [], priority_list: [] } as SurvivorsResponse; },
     getMeshLog: async () => { await delay(200); return { mesh_log: [], total_entries: 0 } as MeshLogResponse; },
     reset: async () => { await delay(500); return { status: "success", message: "Reset complete." }; },
@@ -89,7 +89,8 @@ export const api = {
   },
 
   drones: {
-    list: async () => { await delay(200); return { drones: [], summary: { total: 0, active: 0, offline: 0, charging: 0, low_battery: [] } } as DronesResponse; },
+    list: async () => { await delay(200); return { drones: [], summary: { drones: {} as any, survivors: { total: 0, detected: 0, rescued: 0, critical_unrescued: 0 }, mission_complete: false } } as DronesResponse; },
     get: async (id: string) => { await delay(200); return {} as Drone; },
   }
 };
+

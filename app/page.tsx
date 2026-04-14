@@ -147,6 +147,8 @@ function getStatusColor(status: string) {
   }
 }
 
+import Header from "@/components/header";
+
 // ─── Static chart data ─────────────────────────────────────────────────────────
 const SECTOR_DATA = [
   { sector: "NW", completed: 16, pending: 2 },
@@ -346,11 +348,13 @@ export default function DashboardPage() {
   }, [survivorData]);
 
   if (!mounted) {
-    return <div className="min-h-screen animate-pulse rounded-lg bg-[#0d1117]" />;
+    return <div className="fixed inset-0 z-[100] flex flex-col bg-black animate-pulse" />;
   }
 
   return (
-    <div className="flex-1 space-y-4 overflow-auto rounded-lg bg-[#0d1117] p-4 text-white sm:p-6">
+    <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-auto">
+      <Header />
+      <div className="flex-1 p-4 sm:p-6 space-y-4 max-w-[1600px] w-full mx-auto pb-24">
 
       {/* ── Header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -710,6 +714,7 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
+    </div>
     </div>
   );
 }
