@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DeckGL from "@deck.gl/react";
-import { ScatterplotLayer, TextLayer, PathLayer, ColumnLayer } from "@deck.gl/layers";
+import { ScatterplotLayer, TextLayer, PathLayer, ColumnLayer, IconLayer } from "@deck.gl/layers";
 import type { PickingInfo } from "@deck.gl/core";
 import Map, { NavigationControl } from "react-map-gl/mapbox";
 import type { Drone, Survivor } from "@/types/api_types";
@@ -30,6 +30,15 @@ type SelectedObject =
   | { kind: "drone"; data: Drone }
   | { kind: "survivor"; data: Survivor }
   | null;
+
+// Lucide HeartPulse SVG -> Data URI (White version for masking)
+const HEART_PULSE_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>'
+)}`;
+
+const ICON_MAPPING = {
+  heart: { x: 0, y: 0, width: 24, height: 24, mask: true },
+};
 
 interface InfraItem {
   id: string;
@@ -60,7 +69,7 @@ function droneGlowColor(status: string): Color4 {
 
 function survivorFillColor(s: Survivor, pulse: number): Color4 {
   if (s.rescued) return [125, 211, 252, 230]; // Sky 300
-  if (!s.detected) return [148, 163, 184, 130]; // Slate 400 (Muted)
+  if (!s.detected) return [148, 163, 184, 255]; // Slate 400 (Muted)
   
   if (s.condition === "critical") return pulse ? [255, 60, 60, 255] : [239, 68, 68, 220]; // Red 500
   if (s.condition === "moderate") return [245, 158, 11, 240]; // Amber 500
@@ -200,7 +209,7 @@ export default function SimulationMap3D({
       diskResolution: 6, // Hexagonal base
       radius: 20,
       extruded: true,
-      getElevation: 30, // Lower height
+      getElevation: 20,
       getFillColor: [34, 197, 94, 200],
       getLineColor: [167, 243, 208, 255],
       lineWidthMinPixels: 1,
@@ -241,7 +250,7 @@ export default function SimulationMap3D({
       diskResolution: 6, // Hexagonal base
       radius: 20,
       extruded: true,
-      getElevation: 30, // Lower height
+      getElevation: 20,
       getFillColor: [14, 165, 233, 200],
       getLineColor: [186, 230, 253, 255],
       lineWidthMinPixels: 1,
@@ -279,21 +288,19 @@ export default function SimulationMap3D({
       updateTriggers: { getFillColor: [pulse] },
     }),
 
-    // Survivor markers
-    new ScatterplotLayer<Survivor>({
+    // Survivor markers — Lucide HeartPulse Icons
+    new IconLayer<Survivor>({
       id: "survivors",
       data: survivors,
       getPosition: (s) => toCoord(s.position.x, s.position.y),
-      getRadius: 26,
-      radiusMinPixels: 9,
-      radiusMaxPixels: 28,
-      getFillColor: (s) => survivorFillColor(s, pulse),
-      getLineColor: (s) => survivorLineColor(s),
-      lineWidthMinPixels: 2.5,
-      filled: true,
-      stroked: true,
+      iconAtlas: HEART_PULSE_SVG,
+      iconMapping: ICON_MAPPING,
+      getIcon: () => "heart",
+      sizeUnits: "pixels",
+      getSize: pulse ? 32 : 26,
+      getColor: (s) => survivorFillColor(s, pulse),
       pickable: true,
-      updateTriggers: { getFillColor: [pulse] },
+      updateTriggers: { getSize: [pulse], getColor: [pulse] },
       onClick: (info: PickingInfo) => {
         if (info.object) {
           setSelected({ kind: "survivor", data: info.object as Survivor });
@@ -325,7 +332,7 @@ export default function SimulationMap3D({
     new ScatterplotLayer<Drone>({
       id: "scan-radius",
       data: drones.filter((d) => d.status === "scanning"),
-      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 31],
+      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 21],
       getRadius: 200,
       radiusMinPixels: 32,
       radiusMaxPixels: 130,
@@ -340,7 +347,7 @@ export default function SimulationMap3D({
     new ScatterplotLayer<Drone>({
       id: "drone-glow",
       data: drones,
-      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 31],
+      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 21],
       getRadius: 38,
       radiusMinPixels: 12,
       radiusMaxPixels: 30,
@@ -353,7 +360,7 @@ export default function SimulationMap3D({
     new ColumnLayer<Drone>({
       id: "drones",
       data: drones,
-      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 32],
+      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 22],
       diskResolution: 3, // Triangle
       radius: 18,
       extruded: true,
@@ -377,7 +384,7 @@ export default function SimulationMap3D({
     new TextLayer<Drone>({
       id: "drone-labels",
       data: drones,
-      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 33],
+      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 23],
       getText: (d) => d.drone_id.replace("drone_", "D"),
       getSize: 12,
       getColor: [255, 255, 255, 220],
@@ -394,7 +401,7 @@ export default function SimulationMap3D({
     new TextLayer<Drone>({
       id: "drone-battery-labels",
       data: drones,
-      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 33],
+      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 23],
       getText: (d) => `${Math.round(d.battery)}%`,
       getSize: 10,
       getColor: (d) =>
