@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DeckGL from "@deck.gl/react";
-import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
+import { ScatterplotLayer, TextLayer, PathLayer } from "@deck.gl/layers";
 import type { PickingInfo } from "@deck.gl/core";
 import Map, { NavigationControl } from "react-map-gl/mapbox";
 import type { Drone, Survivor } from "@/types/api_types";
@@ -12,7 +12,7 @@ const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 const MAP_STYLE = "mapbox://styles/mapbox/satellite-streets-v12";
 
 // Kuala Lumpur suburban disaster zone — mixed terrain + buildings on satellite
-const MISSION_CENTER: [number, number] = [101.7125, 3.157]; // [lng, lat]
+const MISSION_CENTER: [number, number] = [100.303163, 5.356944]; // [lng, lat]
 const CELL_DEG = 0.00042; // ~47 m per grid cell
 const GRID = 20;
 
@@ -31,6 +31,29 @@ function toCoord(x: number, y: number): [number, number] {
   const lat = MISSION_CENTER[1] + (y - (GRID - 1) / 2) * CELL_DEG;
   return [lng, lat];
 }
+
+// Generate vertical and horizontal grid lines for the tactical overlay
+const GRID_LINES = (() => {
+  const lines: { path: [number, number][] }[] = [];
+  const start = -0.5;
+  const end = GRID - 0.5;
+
+  // Vertical lines
+  for (let x = 0; x <= GRID; x++) {
+    const gx = x - 0.5;
+    lines.push({
+      path: [toCoord(gx, start), toCoord(gx, end)],
+    });
+  }
+  // Horizontal lines
+  for (let y = 0; y <= GRID; y++) {
+    const gy = y - 0.5;
+    lines.push({
+      path: [toCoord(start, gy), toCoord(end, gy)],
+    });
+  }
+  return lines;
+})();
 
 type Color4 = [number, number, number, number];
 
@@ -133,6 +156,18 @@ export default function SimulationMap3D({ drones, survivors, pulse }: Props) {
   }, []);
 
   const layers = useMemo(() => [
+    // Tactical HUD Grid
+    new PathLayer({
+      id: "tactical-grid",
+      data: GRID_LINES,
+      getPath: (d) => d.path,
+      getColor: [61, 158, 228, 126], // Subtle cyan with low alpha
+      getWidth: 1,
+      widthMinPixels: 0.5,
+      capRounded: true,
+      jointRounded: true,
+    }),
+
     // Thermal heat bloom around detected survivors
     new ScatterplotLayer<Survivor>({
       id: "thermal-halos",
