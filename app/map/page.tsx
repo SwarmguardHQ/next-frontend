@@ -17,46 +17,19 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
-import { Drone, Survivor, MissionsListResponse, ScenariosListResponse } from "@/types/api_types";
+import {
+  Drone,
+  Survivor,
+  MissionsListResponse,
+  ScenariosListResponse,
+  WorldStreamTickPayload,
+} from "@/types/api_types";
 import { cn } from "@/lib/utils";
 
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { classifyIntent, SCENARIOS, BASE_TELEMETRY } from "@/lib/drone-scenarios";
 import { CommandLog, CommandStatus, DroneScenario, TelemetryState } from "@/types/drone";
 import { QuickCommands } from "@/components/drone-command/quick-commands";
-
-const SimulationMap3D = dynamic(() => import("@/components/map/SimulationMap3D"), { ssr: false });
-
-// ─── Constants & Helpers ──────────────────────────────────────────────────────
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function parseMapMetadata(gridText: string) {
-  const chargingStations: { id: string; x: number; y: number }[] = [];
-  const supplyDepots: { id: string; x: number; y: number }[] = [];
-
-  const lines = gridText.split("\n");
-  lines.forEach((line) => {
-    const trimmed = line.trim();
-    // Skip empty lines, legend headers, or the top coordinate header
-    if (!trimmed || trimmed.startsWith("Legend") || trimmed.startsWith(" "))
-      return;
-
-    const parts = trimmed.split(/\s+/);
-    if (parts.length < 2) return;
-
-    const y = parseInt(parts[0], 10);
-    if (isNaN(y)) return;
-    const content = parts[1];
-
-    for (let x = 0; x < content.length; x++) {
-      const char = content[x];
-      if (char === "C") chargingStations.push({ id: `CS-${x}-${y}`, x, y });
-      if (char === "D") supplyDepots.push({ id: `D-${x}-${y}`, x, y });
-    }
-  });
-  return { chargingStations, supplyDepots };
-}
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Drone, Survivor, WorldStreamTickPayload } from "@/types/api_types";
 
 const SimulationMap3D = dynamic(
   () => import("@/components/map/SimulationMap3D"),
@@ -73,17 +46,6 @@ const SimulationMap3D = dynamic(
 );
 
 const GRID_SIZE = 20;
-
-/** Align with default ``mcp-backend`` scenario depots / chargers. */
-const CHARGING_STATIONS = [
-  { id: "CS1", x: 0, y: 0 },
-  { id: "CS2", x: 9, y: 0 },
-];
-
-const SUPPLY_DEPOTS = [
-  { id: "D1", x: 0, y: 0 },
-  { id: "D2", x: 9, y: 9 },
-];
 
 type ViewMode = "2d" | "3d";
 
@@ -212,10 +174,6 @@ const getStatusIcon = (status: string) => {
 };
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
-export default function MergeCollapsePage() {
-  // Map State
-  const [drones, setDrones] = useState<Drone[]>([]);
-  const [survivors, setSurvivors] = useState<Survivor[]>([]);
 export default function SimulationMapPage() {
   const [{ drones, survivors }, setState] = useState(() => createDemoState());
   const [viewMode, setViewMode] = useState<ViewMode>("2d");
@@ -228,7 +186,7 @@ export default function SimulationMapPage() {
     pending_detections: number;
   } | null>(null);
 
-  const { droneData, survivorData, worldStreamLive, apiError } = useWorldStream({
+  const { droneData, survivorData } = useWorldStream({
     intervalMs: 500,
     pollingMs: 5000,
     onStreamTick: (p: WorldStreamTickPayload) => {
@@ -249,9 +207,8 @@ export default function SimulationMapPage() {
     chargingStations: { id: string; x: number; y: number }[];
     supplyDepots: { id: string; x: number; y: number }[];
   }>({ chargingStations: [], supplyDepots: [] });
-  
+
   // UI State
-  const [viewMode, setViewMode] = useState<"2d" | "3d">("3d");
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   // Mission State

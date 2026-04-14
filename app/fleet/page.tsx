@@ -692,27 +692,7 @@ export default function DroneFleetPage() {
     const { droneData, worldStreamLive, apiError } = useWorldStream({ intervalMs: 500, pollingMs: 5000 });
 
     useEffect(() => {
-        const fetch = async () => {
-            try {
-                const res = await api.world.getDrones();
-                const dronesWithSensors: Drone[] = res.drones.map((d) => ({
-                    ...d,
-                    sensors: d.sensors?.length ? d.sensors : [
-                        { type: "visual", status: d.battery < 10 ? "damaged" : "active", value: "4K/60fps" },
-                        { type: "thermal", status: d.battery < 10 ? "offline" : "active", value: "FLIR Boson" },
-                        { type: "audio", status: "not_installed", value: "N/A" }
-                    ]
-                } as any));
-                setDrones(dronesWithSensors);
-                // Update selected drone data if in showcase
-                setSelected((prev) => prev ? dronesWithSensors.find((d) => d.drone_id === prev.drone_id) ?? prev : null);
-            } catch (e) { console.error(e); }
-        };
-        fetch();
-        const id = setInterval(fetch, 3000);
-        return () => clearInterval(id);
-    }, []);
-        if (!droneData?.drones?.length) return;
+        if (!droneData?.drones) return;
         const dronesWithSensors = droneData.drones.map(attachDefaultSensors);
         setDrones(dronesWithSensors);
         setSelected((prev) =>

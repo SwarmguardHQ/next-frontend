@@ -162,48 +162,6 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<EventLog[]>([]);
   const [mounted, setMounted] = useState(false);
 
-  // ── API polling ──
-  useEffect(() => {
-    let alive = true;
-    const fetch_ = async () => {
-      try {
-        const metricsPromise = api.world.getMetrics().catch(() => null);
-        const [dRes, sRes, mRes, metricsRes] = await Promise.all([
-          api.world.getDrones(),
-          api.world.getSurvivors(),
-          api.world.getMeshLog(),
-          metricsPromise,
-        ]);
-        if (alive) {
-          setDroneData(dRes);
-          setSurvivorData(sRes);
-          if (metricsRes) setWorldMetrics(metricsRes);
-          // Map mesh logs to events only if there are active logs
-          if (mRes.mesh_log && mRes.mesh_log.length > 0) {
-            const mEvents: EventLog[] = mRes.mesh_log.slice(-12).reverse().map((msg, i) => ({
-              id: `m-${i}`,
-              ts: formatClock(Date.now() - i * 1000), // Approximate timestamp
-              level: msg.includes("CRITICAL") || msg.includes("LOW") ? "ACTION"
-                     : msg.includes("detected") ? "OBS" : "WARN",
-              text: msg,
-            }));
-            setEvents((prev) => {
-              // Try to merge existing demo events if real list is short
-              if (mEvents.length < 3) return [...mEvents, ...prev.slice(0, 3)].slice(0, 12);
-              return mEvents;
-            });
-          }
-          setApiError(null);
-        }
-      } catch (e: any) {
-        if (alive) setApiError(e.message || "Backend unreachable.");
-      } finally {
-        if (alive) setApiLoading(false);
-      }
-    };
-    fetch_();
-    const id = setInterval(fetch_, 3000);
-    return () => { alive = false; clearInterval(id); };
   const applyMeshTailToEvents = useCallback((meshTail: string[]) => {
     if (!meshTail.length) return;
     const mEvents: EventLog[] = meshTail.slice(-12).reverse().map((msg, i) => ({
