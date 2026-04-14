@@ -26,9 +26,33 @@ import { QuickCommands } from "@/components/drone-command/quick-commands";
 const SimulationMap3D = dynamic(() => import("@/components/map/SimulationMap3D"), { ssr: false });
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
-const GRID_SIZE = 20;
-const CHARGING_STATIONS = [{ id: "CS1", x: 0, y: 0 }, { id: "CS2", x: 19, y: 0 }];
-const SUPPLY_DEPOTS = [{ id: "D1", x: 0, y: 0 }, { id: "D2", x: 19, y: 19 }];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function parseMapMetadata(gridText: string) {
+  const chargingStations: { id: string; x: number; y: number }[] = [];
+  const supplyDepots: { id: string; x: number; y: number }[] = [];
+
+  const lines = gridText.split("\n");
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    // Skip empty lines, legend headers, or the top coordinate header
+    if (!trimmed || trimmed.startsWith("Legend") || trimmed.startsWith(" "))
+      return;
+
+    const parts = trimmed.split(/\s+/);
+    if (parts.length < 2) return;
+
+    const y = parseInt(parts[0], 10);
+    if (isNaN(y)) return;
+    const content = parts[1];
+
+    for (let x = 0; x < content.length; x++) {
+      const char = content[x];
+      if (char === "C") chargingStations.push({ id: `CS-${x}-${y}`, x, y });
+      if (char === "D") supplyDepots.push({ id: `D-${x}-${y}`, x, y });
+    }
+  });
+  return { chargingStations, supplyDepots };
+}
 
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -45,9 +69,11 @@ function droneColor(status: string): string {
 
 function survivorColor(s: Survivor): string {
   if (s.rescued) return "text-sky-300";
-  if (s.condition === "critical") return "text-red-400";
-  if (s.condition === "moderate") return "text-amber-400";
-  if (s.condition === "stable") return "text-emerald-400";
+  if (!s.detected) return "text-slate-400";
+  
+  if (s.condition === "critical") return "text-red-500";
+  if (s.condition === "moderate") return "text-amber-500";
+  if (s.condition === "stable") return "text-emerald-500";
   return "text-slate-400";
 }
 
@@ -66,6 +92,11 @@ export default function MergeCollapsePage() {
   const [drones, setDrones] = useState<Drone[]>([]);
   const [survivors, setSurvivors] = useState<Survivor[]>([]);
   const [pulse, setPulse] = useState(0);
+  const [gridSize, setGridSize] = useState(20);
+  const [infra, setInfra] = useState<{
+    chargingStations: { id: string; x: number; y: number }[];
+    supplyDepots: { id: string; x: number; y: number }[];
+  }>({ chargingStations: [], supplyDepots: [] });
   
   // UI State
   const [viewMode, setViewMode] = useState<"2d" | "3d">("3d");
@@ -108,6 +139,24 @@ export default function MergeCollapsePage() {
 
     fetchMap();
     fetchMissions();
+    
+    // Fetch grid dimensions from backend
+    const fetchGrid = async () => {
+      try {
+        const mapData = await api.world.getMap();
+        setGridSize(mapData.width || 20);
+        if (mapData.map) {
+          const { chargingStations, supplyDepots } = parseMapMetadata(
+            mapData.map
+          );
+          setInfra({ chargingStations, supplyDepots });
+        }
+      } catch (e) {
+        console.error("Failed to fetch map dimensions", e);
+      }
+    };
+    fetchGrid();
+
     const mapId = setInterval(fetchMap, 800);      // tighter poll for live feel
     const missionId = setInterval(fetchMissions, 5000);
     return () => { clearInterval(mapId); clearInterval(missionId); };
@@ -166,33 +215,33 @@ export default function MergeCollapsePage() {
   // ─── 2D Map Derived Data
   const cells = useMemo(() => {
     const list: { x: number; y: number }[] = [];
-    for (let y = GRID_SIZE - 1; y >= 0; y -= 1) {
-      for (let x = 0; x < GRID_SIZE; x += 1) list.push({ x, y });
+    for (let y = gridSize - 1; y >= 0; y -= 1) {
+      for (let x = 0; x < gridSize; x += 1) list.push({ x, y });
     }
     return list;
-  }, []);
+  }, [gridSize]);
 
   const dronesByCell = useMemo(() => {
     const map = new Map<string, Drone[]>();
     for (const drone of drones) {
-      const x = Math.round(clamp(Number(drone.position?.x), 0, GRID_SIZE - 1));
-      const y = Math.round(clamp(Number(drone.position?.y), 0, GRID_SIZE - 1));
+      const x = Math.round(clamp(Number(drone.position?.x), 0, gridSize - 1));
+      const y = Math.round(clamp(Number(drone.position?.y), 0, gridSize - 1));
       const key = `${x}-${y}`;
       map.set(key, [...(map.get(key) ?? []), drone]);
     }
     return map;
-  }, [drones]);
+  }, [drones, gridSize]);
 
   const survivorsByCell = useMemo(() => {
     const map = new Map<string, Survivor[]>();
     for (const survivor of survivors) {
-      const x = Math.round(clamp(Number(survivor.position?.x), 0, GRID_SIZE - 1));
-      const y = Math.round(clamp(Number(survivor.position?.y), 0, GRID_SIZE - 1));
+      const x = Math.round(clamp(Number(survivor.position?.x), 0, gridSize - 1));
+      const y = Math.round(clamp(Number(survivor.position?.y), 0, gridSize - 1));
       const key = `${x}-${y}`;
       map.set(key, [...(map.get(key) ?? []), survivor]);
     }
     return map;
-  }, [survivors]);
+  }, [survivors, gridSize]);
 
   const sortedMissions = missionsData?.missions?.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()) ?? [];
 
@@ -266,27 +315,69 @@ export default function MergeCollapsePage() {
                 <div className="flex justify-center min-w-[500px]">
                   <div
                     className="grid gap-px rounded-md bg-slate-800/80 p-px"
-                    style={{ gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))`, width: "100%", maxWidth: "980px", aspectRatio: "1/1" }}
+                    style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`, width: "100%", maxWidth: "980px", aspectRatio: "1/1" }}
                   >
                   {cells.map((cell) => {
                     const key = `${cell.x}-${cell.y}`;
                     const cellDrones = dronesByCell.get(key) ?? [];
                     const cellSurvivors = survivorsByCell.get(key) ?? [];
-                    const isCS = CHARGING_STATIONS.some((cs) => cs.x === cell.x && cs.y === cell.y);
-                    const isDepot = SUPPLY_DEPOTS.some((d) => d.x === cell.x && d.y === cell.y);
+                    const isCS = infra.chargingStations.some(
+                      (cs) => cs.x === cell.x && cs.y === cell.y
+                    );
+                    const isDepot = infra.supplyDepots.some(
+                      (d) => d.x === cell.x && d.y === cell.y
+                    );
+
+                    const hasDrones = cellDrones.length > 0;
+                    const hasSurvivors = cellSurvivors.length > 0;
 
                     return (
-                      <div key={key} className="group relative flex aspect-square items-center justify-center bg-slate-900 transition-colors hover:bg-slate-800">
-                        {isCS && <BatteryCharging className="absolute left-1 top-1 h-3 w-3 text-emerald-800/80" />}
-                        {isDepot && <Package className="absolute bottom-1 right-1 h-3 w-3 text-sky-800/80" />}
-                        {(cellSurvivors.length > 0 || cellDrones.length > 0) && <span className="absolute inset-0 rounded-[2px] ring-1 ring-sky-400/15" />}
+                      <div
+                        key={key}
+                        className={`group relative flex aspect-square items-center justify-center transition-colors hover:bg-slate-800 ${
+                          isCS ? "bg-emerald-950/60" : isDepot ? "bg-sky-950/60" : "bg-slate-900"
+                        }`}
+                      >
+                        {/* Infrastructure badges — full-size, clearly visible */}
+                        {isCS && (
+                          <div className="absolute left-0.5 top-0.5 flex items-center justify-center rounded bg-emerald-500/25 p-0.5 ring-1 ring-emerald-400/60">
+                            <BatteryCharging className="h-3 w-3 text-emerald-400" />
+                          </div>
+                        )}
+                        {isDepot && (
+                          <div className="absolute bottom-0.5 right-0.5 flex items-center justify-center rounded bg-sky-500/25 p-0.5 ring-1 ring-sky-400/60">
+                            <Package className="h-3 w-3 text-sky-400" />
+                          </div>
+                        )}
+
+                        {/* Occupied cell highlight */}
+                        {(hasSurvivors || hasDrones) && (
+                          <span className="absolute inset-0 rounded-[2px] ring-1 ring-sky-400/40" />
+                        )}
+
                         <div className="flex flex-wrap items-center justify-center gap-1 p-1">
                           {cellSurvivors.map((s) => (
-                            <HeartPulse key={s.survivor_id} className={`h-4 w-4 ${survivorColor(s)} ${!s.detected && !s.rescued ? "opacity-45" : pulse ? "opacity-100" : "opacity-70"}`} />
+                            <HeartPulse
+                              key={s.survivor_id}
+                              className={`h-4 w-4 drop-shadow-sm ${
+                                survivorColor(s)
+                              } ${
+                                !s.detected && !s.rescued
+                                  ? "opacity-60"
+                                  : pulse
+                                    ? "opacity-100"
+                                    : "opacity-90"
+                              }`}
+                            />
                           ))}
                           {cellDrones.map((d) => (
-                            <div key={d.drone_id} className="relative">
-                              <Triangle fill="currentColor" className={`h-4 w-4 ${droneColor(d.status)} ${d.status === "offline" ? "rotate-180" : ""}`} />
+                            <div key={d.drone_id} className="relative drop-shadow-sm">
+                              <Triangle
+                                fill="currentColor"
+                                className={`h-4 w-4 ${droneColor(d.status)} ${
+                                  d.status === "offline" ? "rotate-180" : ""
+                                }`}
+                              />
                             </div>
                           ))}
                         </div>
@@ -296,7 +387,14 @@ export default function MergeCollapsePage() {
                   </div>
                 </div>
               ) : (
-                <SimulationMap3D drones={drones} survivors={survivors} pulse={pulse} />
+                <SimulationMap3D
+                  drones={drones}
+                  survivors={survivors}
+                  pulse={pulse}
+                  gridSize={gridSize}
+                  chargingStations={infra.chargingStations}
+                  supplyDepots={infra.supplyDepots}
+                />
               )}
             </CardContent>
           </Card>
@@ -311,11 +409,24 @@ export default function MergeCollapsePage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-2 text-xs text-slate-300 p-4 pt-0">
-                  <p className="font-semibold tracking-widest text-slate-400 uppercase">Infrastructure</p>
-                  <div className="flex items-center gap-2"><BatteryCharging className="h-4 w-4 text-emerald-500" /> Charging Station</div>
-                  <div className="flex items-center gap-2"><Package className="h-4 w-4 text-sky-500" /> Supply Depot</div>
+                  <p className="font-semibold tracking-widest text-slate-400 uppercase">
+                    Infrastructure
+                  </p>
+                  {infra.chargingStations.map((cs) => (
+                    <div key={cs.id} className="flex items-center gap-2">
+                      <BatteryCharging className="h-4 w-4 text-emerald-500" />{" "}
+                      Station {cs.id.replace("CS-", "")}
+                    </div>
+                  ))}
+                  {infra.supplyDepots.map((d) => (
+                    <div key={d.id} className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-sky-500" /> Depot{" "}
+                      {d.id.replace("D-", "")}
+                    </div>
+                  ))}
 
-                  <p className="mt-2 font-semibold tracking-widest text-slate-400 uppercase">Drone States</p>
+                  <p className="mt-2 font-semibold tracking-widest text-slate-400 uppercase">
+Drone States</p>
                   <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-4 w-4 text-sky-400" /> Flying / Scanning</div>
                   <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-4 w-4 text-amber-400" /> Returning</div>
                   <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-4 w-4 text-emerald-400" /> Charging</div>
