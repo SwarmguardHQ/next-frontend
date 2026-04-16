@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "SIREN",
-  description: "Swarm Intelligence · Earthquake SAR",
+  description: "SIREN · Earthquake SAR coordination",
 };
 
 export default function RootLayout({

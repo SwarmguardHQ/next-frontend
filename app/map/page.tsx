@@ -186,12 +186,15 @@ export default function SimulationMapPage() {
     pending_detections: number;
   } | null>(null);
 
-  const { droneData, survivorData } = useWorldStream({
+  const [mesaBusy, setMesaBusy] = useState(false);
+
+  const { droneData, survivorData, worldStreamLive, refetch } = useWorldStream({
     intervalMs: 500,
     pollingMs: 5000,
     onStreamTick: (p: WorldStreamTickPayload) => {
       const v = p.sim_visual;
       if (v?.heatmap?.length) setSimHeat(v.heatmap);
+      else setSimHeat(null);
       if (v) {
         setSimMeta({
           mesa_step: v.mesa_step,
@@ -199,9 +202,23 @@ export default function SimulationMapPage() {
           confirmed_survivors: v.confirmed_survivors,
           pending_detections: v.pending_detections,
         });
+      } else {
+        setSimMeta(null);
       }
     },
   });
+
+  const handleMesaStep = useCallback(async () => {
+    setMesaBusy(true);
+    try {
+      await api.world.mesaStep(1);
+      await refetch();
+    } catch {
+      /* optional Mesa / 503 */
+    } finally {
+      setMesaBusy(false);
+    }
+  }, [refetch]);
   const [gridSize, setGridSize] = useState(20);
   const [infra, setInfra] = useState<{
     chargingStations: { id: string; x: number; y: number }[];
@@ -489,6 +506,7 @@ export default function SimulationMapPage() {
                   gridSize={gridSize}
                   chargingStations={infra.chargingStations}
                   supplyDepots={infra.supplyDepots}
+                  simHeat={simHeat}
                 />
               )}
             </CardContent>
@@ -532,6 +550,15 @@ Drone States</p>
                   <div className="flex items-center gap-2"><HeartPulse className="h-4 w-4 text-amber-400" /> Moderate</div>
                   <div className="flex items-center gap-2"><HeartPulse className="h-4 w-4 text-emerald-400" /> Stable</div>
                   <div className="flex items-center gap-2"><HeartPulse className="h-4 w-4 text-slate-400 opacity-45" /> Undetected</div>
+
+                  <p className="mt-2 font-semibold tracking-widest text-slate-400 uppercase">
+                    Simulation
+                  </p>
+                  <p className="text-[10px] leading-relaxed text-slate-500">
+                    Cyan cell tint / 3D columns follow <span className="text-sky-400/90">sim_visual</span> when the
+                    backend runs with Mesa enabled. Use <span className="text-sky-400/90">+1 step</span> to advance the
+                    ABM between stream ticks.
+                  </p>
                 </CardContent>
               </Card>
           </div>

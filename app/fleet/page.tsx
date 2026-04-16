@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import { cn } from "@/lib/utils";
 import { useWorldStream } from "@/lib/useWorldStream";
-import { Drone } from "@/types/api_types";
+import type { Drone, WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
 import {
     ArrowLeft, Zap, Wind, Weight, Navigation, Cpu, Radio,
     Camera, Shield, ChevronRight, Eye, Activity, RadioReceiver,
@@ -688,8 +688,15 @@ function attachDefaultSensors(d: Drone): Drone {
 export default function DroneFleetPage() {
     const [drones, setDrones] = useState<Drone[]>([]);
     const [selected, setSelected] = useState<Drone | null>(null);
+    const [simVisual, setSimVisual] = useState<WorldStreamSimVisual | null>(null);
 
-    const { droneData, worldStreamLive, apiError } = useWorldStream({ intervalMs: 500, pollingMs: 5000 });
+    const { droneData, worldStreamLive, apiError } = useWorldStream({
+        intervalMs: 500,
+        pollingMs: 5000,
+        onStreamTick: (p: WorldStreamTickPayload) => {
+            setSimVisual(p.sim_visual ?? null);
+        },
+    });
 
     useEffect(() => {
         if (!droneData?.drones) return;
@@ -719,6 +726,14 @@ export default function DroneFleetPage() {
                             <span className={worldStreamLive ? "text-emerald-400" : "text-amber-400/90"}>
                                 {worldStreamLive ? "WORLD SSE" : apiError ? "offline" : "REST"}
                             </span>
+                            {simVisual && worldStreamLive && (
+                                <>
+                                    {" · "}
+                                    <span className="text-violet-300/90">
+                                        Mesa step {simVisual.mesa_step} · cov {simVisual.mesa_coverage_pct.toFixed(0)}%
+                                    </span>
+                                </>
+                            )}
                         </p>
                     </div>
                     {drones.length === 0 ? (

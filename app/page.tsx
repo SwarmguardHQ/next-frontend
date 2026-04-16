@@ -45,6 +45,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useWorldStream } from "@/lib/useWorldStream";
+import { api } from "@/lib/api";
+import type { WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
+import { Button } from "@/components/ui/button";
 
 // ─── Stream types ──────────────────────────────────────────────────────────────
 type StreamPoint = {
@@ -182,13 +185,29 @@ export default function DashboardPage() {
   }, []);
 
   // ── Telemetry mount + seed events ──
-  const { droneData, survivorData, worldMetrics, worldStreamLive, apiError, apiLoading } =
+  const [simVisual, setSimVisual] = useState<WorldStreamSimVisual | null>(null);
+  const [mesaBusy, setMesaBusy] = useState(false);
+
+  const { droneData, survivorData, worldMetrics, worldStreamLive, apiError, apiLoading, refetch } =
     useWorldStream({
       onPollMeshLog: applyMeshTailToEvents,
-      onStreamTick: (data) => {
+      onStreamTick: (data: WorldStreamTickPayload) => {
         if (data.mesh_log?.length) applyMeshTailToEvents(data.mesh_log);
+        setSimVisual(data.sim_visual ?? null);
       },
     });
+
+  const handleMesaStep = useCallback(async () => {
+    setMesaBusy(true);
+    try {
+      await api.world.mesaStep(1);
+      await refetch();
+    } catch {
+      /* Mesa optional */
+    } finally {
+      setMesaBusy(false);
+    }
+  }, [refetch]);
 
   // ── Telemetry mount ──
   useEffect(() => {
@@ -331,7 +350,7 @@ export default function DashboardPage() {
       {/* ── Header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold tracking-wide sm:text-3xl">Swarm Command Dashboard</h2>
+          <h2 className="text-2xl font-semibold tracking-wide sm:text-3xl">SIREN Command Dashboard</h2>
           <p className="text-xs tracking-widest text-slate-400 uppercase">Real-time fleet intelligence & mission analytics</p>
         </div>
         <div className="flex items-center gap-2">
@@ -351,6 +370,11 @@ export default function DashboardPage() {
           {apiError && (
             <Badge className="border border-amber-400/40 bg-amber-500/10 text-amber-300">
               <WifiOff className="h-3 w-3" /> DEMO DATA
+            </Badge>
+          )}
+          {simVisual && worldStreamLive && (
+            <Badge className="border border-violet-400/40 bg-violet-500/10 text-violet-200">
+              <Radar className="h-3 w-3" /> MESA step {simVisual.mesa_step}
             </Badge>
           )}
         </div>
@@ -392,6 +416,37 @@ export default function DashboardPage() {
               />
             </div>
           </div>
+          {simVisual && (
+            <div className="space-y-2 border-t border-slate-700/50 pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+                <span className="tracking-widest uppercase text-violet-300/90">Mesa ABM sweep</span>
+                <span className="tabular-nums font-bold text-white">
+                  {simVisual.mesa_coverage_pct.toFixed(1)}%
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-800">
+                <div
+                  className="h-2 rounded-full bg-violet-400/90 transition-all"
+                  style={{ width: `${Math.min(100, simVisual.mesa_coverage_pct)}%` }}
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                <span>
+                  Confirmed {simVisual.confirmed_survivors} · Pending {simVisual.pending_detections}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 border-violet-500/35 bg-slate-900/80 text-[10px] text-violet-100 hover:bg-violet-950/50"
+                  disabled={mesaBusy}
+                  onClick={() => void handleMesaStep()}
+                >
+                  {mesaBusy ? "…" : "+1 Mesa step"}
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

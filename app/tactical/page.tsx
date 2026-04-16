@@ -536,7 +536,7 @@ export default function TacticalPage() {
             </div>
             {/* Footer */}
             <div className="shrink-0 flex justify-between items-center text-[8px] text-slate-600 mt-4 tracking-widest border-t border-white/5 pt-4">
-              <span>� 2024 SWARMGUARD TACTICAL</span>
+              <span>© 2024 SIREN TACTICAL</span>
               <span className="text-green-500 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                 LINK_STABLE

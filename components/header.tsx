@@ -57,7 +57,7 @@ export default function Header() {
                   <Cpu className="h-6 w-6" />
                 </div>
                 <span className="text-sm font-bold tracking-widest text-cyan-400 uppercase drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]">
-                  SWARMGUARD
+                  SIREN
                 </span>
               </Link>
 
@@ -84,7 +84,7 @@ export default function Header() {
         </Sheet>
         
         <h1 className="text-xl font-bold tracking-widest text-cyan-400 uppercase drop-shadow-[0_0_10px_rgba(34,211,238,0.4)] hidden sm:block">
-          SWARMGUARD_HQ
+          SIREN
         </h1>
       </div>
 

@@ -227,7 +227,7 @@ export default function LiveMissionConsole() {
           <CardHeader className="border-b border-slate-800 bg-slate-900/50 pb-4">
             <CardTitle className="text-slate-100 flex items-center gap-2 text-sm font-mono">
               <Terminal className="h-4 w-4" /> 
-              Swarm Coordinator Terminal :: Chain of Thought
+              SIREN Coordinator Terminal :: Chain of Thought
             </CardTitle>
           </CardHeader>
           
