@@ -14,7 +14,7 @@ type LogEvent = {
   result_summary?: string;
   debrief?: string;
 };
-import { Mic, MicOff, Settings, User, Bell, ChevronLeft, ChevronRight, History, ShieldAlert, Cpu, Radar, Send, Play, Terminal, Target, AlertOctagon, CheckCircle2, Clock, AlertCircle, Package, BatteryCharging, HeartPulse, Triangle, Map as MapIcon, Wifi } from "lucide-react";
+import { Mic, MicOff, Settings, User, Bell, ChevronLeft, ChevronRight, History, ShieldAlert, Cpu, Radar, Send, Play, Terminal, Target, AlertOctagon, CheckCircle2, Clock, AlertCircle, Package, BatteryCharging, HeartPulse, Triangle, Map as MapIcon, Wifi, Plus, Minus, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -98,6 +98,12 @@ export default function TacticalPage() {
   const [viewMode, setViewMode] = useState<"2d" | "3d">("3d");
   const [infra, setInfra] = useState<any>({ chargingStations: [], supplyDepots: [] });
 
+  // 2D Map Pan & Zoom State
+  const [zoom, setZoom] = useState(0.7);
+  const [pan, setPan] = useState({ x: 0, y: -180 });
+  const isDragging = useRef(false);
+  const lastMousePos = useRef({ x: 0, y: 0 });
+
   const cells = useMemo(() => {
     const list: { x: number; y: number }[] = [];
     for (let y = gridSize - 1; y >= 0; y -= 1) {
@@ -175,7 +181,8 @@ export default function TacticalPage() {
           setInfra({ chargingStations, supplyDepots });
         }
       } catch (e) {
-        console.error("Failed to fetch map dimensions", e);
+        // Silently fail or log safely to avoid Next.js dev overlay crash loops
+        // console.error("Failed to fetch map dimensions", e);
       }
     };
     fetchGrid();
@@ -317,6 +324,34 @@ export default function TacticalPage() {
   const isCmdActive = cmdStatus === "executing" || cmdStatus === "processing";
   const sortedMissions = missionsData?.missions?.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()) ?? [];
 
+  // 2D Pan & Zoom Handlers
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (viewMode !== "2d") return;
+    const zoomFactor = 0.1;
+    const direction = e.deltaY > 0 ? -1 : 1;
+    setZoom((prev) => Math.max(0.5, Math.min(5, prev + direction * zoomFactor)));
+  }, [viewMode]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if (viewMode !== "2d") return;
+    isDragging.current = true;
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, [viewMode]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDragging.current || viewMode !== "2d") return;
+    const dx = e.clientX - lastMousePos.current.x;
+    const dy = e.clientY - lastMousePos.current.y;
+    setPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+  }, [viewMode]);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    isDragging.current = false;
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+  }, []);
+
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-hidden">
       
@@ -330,6 +365,36 @@ export default function TacticalPage() {
           <div className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
             <div className="relative flex-1">
               <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+                {viewMode === "2d" && (
+                  <div className="flex rounded-md border border-cyan-900/50 bg-black/60 p-1 backdrop-blur-md">
+                    <button
+                      type="button"
+                      onClick={() => setZoom((prev) => Math.min(5, prev + 0.2))}
+                      className="rounded p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-cyan-950/40 transition-colors"
+                      title="Zoom In"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setZoom((prev) => Math.max(0.2, prev - 0.2))}
+                      className="rounded p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-cyan-950/40 transition-colors"
+                      title="Zoom Out"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <div className="w-px h-4 bg-cyan-900/30 mx-1 self-center" />
+                    <button
+                      type="button"
+                      onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+                      className="rounded p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-cyan-950/40 transition-colors"
+                      title="Reset View"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex rounded-md border border-cyan-900/50 bg-black/60 p-1 backdrop-blur-md">
                     <button
                       type="button"
@@ -349,8 +414,18 @@ export default function TacticalPage() {
               </div>
 
               {viewMode === "2d" ? (
-                <div className="absolute inset-0 flex items-center justify-center p-8 bg-slate-950/80 overflow-auto">
-                  <div className="flex justify-center min-w-[400px] w-full max-w-[800px] aspect-square mx-auto my-auto">
+                <div 
+                  className="absolute inset-0 flex items-center justify-center bg-slate-950/80 overflow-hidden cursor-grab active:cursor-grabbing touch-none"
+                  onWheel={handleWheel}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                >
+                  <div 
+                    className="flex justify-center min-w-[800px] w-[1200px] max-w-none aspect-square mx-auto my-auto transition-transform duration-75 origin-center"
+                    style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+                  >
                     <div
                       className="grid gap-px rounded-md bg-slate-800/80 p-px w-full h-full"
                       style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
@@ -371,30 +446,37 @@ export default function TacticalPage() {
                         >
                           {isCS && (
                             <div className="absolute left-0.5 top-0.5 flex items-center justify-center rounded bg-emerald-500/25 p-0.5 ring-1 ring-emerald-400/60">
-                              <BatteryCharging className="h-3 w-3 text-emerald-400" />
+                              <BatteryCharging className="h-5 w-5 text-emerald-400" />
                             </div>
                           )}
                           {isDepot && (
-                            <div className="absolute bottom-0.5 right-0.5 flex items-center justify-center rounded bg-sky-500/25 p-0.5 ring-1 ring-sky-400/60">
-                              <Package className="h-3 w-3 text-sky-400" />
+                            <div className="absolute left-0.5 top-0.5 flex items-center justify-center rounded bg-sky-500/25 p-0.5 ring-1 ring-sky-400/60">
+                              <Package className="h-5 w-5 text-sky-400" />
                             </div>
                           )}
                           {(hasSurvivors || hasDrones) && (
                             <span className="absolute inset-0 rounded-[2px] ring-1 ring-sky-400/40" />
                           )}
-                          <div className="flex flex-wrap items-center justify-center gap-1 p-1">
+                          <div className="flex flex-wrap items-center justify-center gap-2 p-1">
                             {cellSurvivors.map((s) => (
-                              <HeartPulse
-                                key={s.survivor_id}
-                                className={"h-4 w-4 drop-shadow-sm " + survivorColor(s) + " " + (!s.detected && !s.rescued ? "opacity-60" : pulse ? "opacity-100" : "opacity-90")}
-                              />
+                              <div key={s.survivor_id} className="flex flex-col items-center justify-center">
+                                <span className="rounded bg-slate-900/90 px-1 py-0.5 text-[10px] font-bold tracking-widest text-slate-300 z-50 leading-none mb-1">
+                                  {s.survivor_id}
+                                </span>
+                                <HeartPulse
+                                  className={"h-8 w-8 drop-shadow-sm " + survivorColor(s) + " " + (!s.detected && !s.rescued ? "opacity-60" : pulse ? "opacity-100" : "opacity-90")}
+                                />
+                              </div>
                             ))}
                             {cellDrones.map((d) => (
-                              <div key={d.drone_id} className="relative drop-shadow-sm">
+                              <div key={d.drone_id} className="flex flex-col items-center justify-center drop-shadow-sm">
                                 <Triangle
                                   fill="currentColor"
-                                  className={"h-4 w-4 " + droneColor(d.status) + " " + (d.status === "offline" ? "rotate-180" : "")}
+                                  className={"h-8 w-8 " + droneColor(d.status) + " " + (d.status === "offline" ? "rotate-180" : "")}
                                 />
+                                <span className="rounded bg-slate-900/90 px-1 py-0.5 text-[10px] font-bold tracking-widest text-slate-300 z-50 leading-none mt-1">
+                                  {d.drone_id.replace(/^DRONE_/i, '')}
+                                </span>
                               </div>
                             ))}
                           </div>
