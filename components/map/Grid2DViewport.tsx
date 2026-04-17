@@ -168,7 +168,7 @@ export function Grid2DViewport({ children, className, toolbarClassName }: Grid2D
           </div>
         </div>
 
-        <p className="pointer-events-none absolute bottom-2 left-3 right-3 z-10 text-center text-[9px] uppercase tracking-widest text-slate-500">
+        <p className="pointer-events-none fixed bottom-4 left-0 right-0 z-50 text-center text-[9px] uppercase tracking-widest text-slate-500/80 drop-shadow-md">
           Shift + drag to rotate · Ctrl / ⌘ + wheel to zoom
         </p>
       </div>
