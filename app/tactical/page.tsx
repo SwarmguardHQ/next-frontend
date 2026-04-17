@@ -83,10 +83,10 @@ function survivorColor(s: Survivor): string {
 
 const getStatusIcon = (status: string) => {
   switch (status) {
-    case "running":  return <Clock className="h-4 w-4 text-blue-500 animate-pulse" />;
+    case "running": return <Clock className="h-4 w-4 text-blue-500 animate-pulse" />;
     case "complete": return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-    case "failed":   return <AlertOctagon className="h-4 w-4 text-destructive" />;
-    default:         return <AlertCircle className="h-4 w-4 text-slate-500" />;
+    case "failed": return <AlertOctagon className="h-4 w-4 text-destructive" />;
+    default: return <AlertCircle className="h-4 w-4 text-slate-500" />;
   }
 };
 
@@ -187,7 +187,7 @@ export default function TacticalPage() {
         const [mRes, scRes] = await Promise.all([api.missions.list(), api.scenarios.list()]);
         setMissionsData(mRes);
         setScenariosData(scRes);
-      } catch (e) {}
+      } catch (e) { }
     };
 
     fetchMissions();
@@ -258,7 +258,7 @@ export default function TacticalPage() {
       try {
         const data = JSON.parse(msgEvent.data);
         handleEvent("error", data);
-      } catch (err) {}
+      } catch (err) { }
     });
 
     eventSource.addEventListener("complete", (e) => {
@@ -266,9 +266,9 @@ export default function TacticalPage() {
       handleEvent("complete", data);
       eventSource.close();
       setStreamActive(false);
-      
+
       // Optionally fetch updated active sorties 
-      try { api.missions.list().then((res) => setMissionsData(res)); } catch(e){}
+      try { api.missions.list().then((res) => setMissionsData(res)); } catch (e) { }
     });
 
     eventSource.onmessage = (e) => {
@@ -278,7 +278,7 @@ export default function TacticalPage() {
         if (data.type && !["log", "step", "error", "complete"].includes(data.type)) {
           handleEvent("log", { message: data.message || JSON.stringify(data) });
         }
-      } catch (err) {}
+      } catch (err) { }
     };
 
     eventSource.onerror = (err) => {
@@ -298,10 +298,10 @@ export default function TacticalPage() {
       const res = await api.missions.create({ scenarios: selectedScenario });
       setSelectedScenario("");
       if (res && res.mission_id) {
-         setActiveMissionId(res.mission_id);
-         setMissionLogs([]);
+        setActiveMissionId(res.mission_id);
+        setMissionLogs([]);
       }
-    } catch (e) {} finally {
+    } catch (e) { } finally {
       setIsStarting(false);
     }
   };
@@ -323,7 +323,7 @@ export default function TacticalPage() {
 
     setCmdStatus("executing");
     setFeedback(`Executing: ${scenario.label}`);
-    
+
     for (let i = 0; i < scenario.steps.length; i++) {
       await new Promise((r) => setTimeout(r, 700 + Math.random() * 400));
     }
@@ -519,23 +519,22 @@ export default function TacticalPage() {
                   </div>
                 </div>
               </div>
-              
-              </div>
+
             </div>
-        {/* ---------- LEFT PANEL: MISSION COMMAND ---------- */}
-        <div className={cn(
+          </div>
+        {/* ---------- LEFT PANEL: MISSION COMMAND ---------- */}        <div className={cn(
           "relative z-10 flex w-80 flex-col border-r border-white/10 bg-black/95 shadow-2xl transition-all duration-300",
           leftOpen ? "translate-x-0" : "-translate-x-full"
         )}>
           {/* Toggle Button */}
-          <button 
+          <button
             onClick={() => setLeftOpen(!leftOpen)}
             className="absolute -right-6 top-1/2 -translate-y-1/2 flex h-12 w-6 items-center justify-center rounded-r bg-black/60 border border-l-0 border-white/10 text-slate-400 hover:text-cyan-400"
           >
             {leftOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
 
-          <div className="flex flex-col p-6 space-y-6 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
+          <div className="flex-1 flex flex-col p-6 space-y-6 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
             {/* Headers */}
             <div>
               <h2 className="text-xl font-bold text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.4)]">MISSION_CTRL</h2>
@@ -574,16 +573,17 @@ export default function TacticalPage() {
                   ))}
                 </SelectContent>
               </Select>
-              
-              <Button 
+
+              <Button
                 variant="outline"
-                className="w-full h-10 text-xs tracking-widest uppercase border border-cyan-700 bg-cyan-950/30 text-cyan-400 hover:bg-cyan-900 hover:text-cyan-300 rounded-sm transition-all" 
-                disabled={!selectedScenario || isStarting} 
+                className="w-full h-10 text-xs tracking-widest uppercase border border-cyan-700 bg-cyan-950/30 text-cyan-400 hover:bg-cyan-900 hover:text-cyan-300 rounded-sm transition-all"
+                disabled={!selectedScenario || isStarting}
                 onClick={handleStartMission}
               >
                 {isStarting ? "PROCESSING..." : <><Play className="mr-2 h-3.5 w-3.5" />LAUNCH SCENARIO</>}
               </Button>
             </div>
+
 
             {/* Voice Command Block */}
             <div className="space-y-4 border-t border-white/10 pt-6">
@@ -593,26 +593,26 @@ export default function TacticalPage() {
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2">
                   <Button type="button" variant="outline" size="icon" disabled={isCmdActive || !supported} onClick={handleMic}
-                      className={cn("h-10 w-10 shrink-0 rounded-sm border-cyan-800 bg-cyan-950/30 text-cyan-400 hover:bg-cyan-900 transition-all", isListening && "border-green-500 bg-green-500/10 text-green-400 ring-2 ring-green-500/20 animate-pulse")}
+                    className={cn("h-10 w-10 shrink-0 rounded-sm border-cyan-800 bg-cyan-950/30 text-cyan-400 hover:bg-cyan-900 transition-all", isListening && "border-green-500 bg-green-500/10 text-green-400 ring-2 ring-green-500/20 animate-pulse")}
                   >
-                      {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   </Button>
                   <Input
-                      placeholder='e.g. "patrol route"'
-                      value={voiceText}
-                      disabled={isCmdActive}
-                      onChange={(e) => setVoiceText(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                      className="h-10 text-xs flex-1 bg-black/50 border-cyan-800/50 text-cyan-100 placeholder:text-cyan-800 rounded-sm focus-visible:ring-cyan-500"
+                    placeholder='e.g. "patrol route"'
+                    value={voiceText}
+                    disabled={isCmdActive}
+                    onChange={(e) => setVoiceText(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                    className="h-10 text-xs flex-1 bg-black/50 border-cyan-800/50 text-cyan-100 placeholder:text-cyan-800 rounded-sm focus-visible:ring-cyan-500"
                   />
                   <Button size="icon" variant="outline" disabled={isCmdActive || !voiceText.trim()} onClick={handleSend} className="h-10 w-10 shrink-0 rounded-sm border-cyan-800 bg-cyan-950/30 hover:bg-cyan-900 text-cyan-400">
-                      <Send className="h-4 w-4" />
+                    <Send className="h-4 w-4" />
                   </Button>
                 </div>
-                
+
                 <div className="h-6">
                   <p className={cn("text-[10px] uppercase tracking-widest", (!transcript && !interim) ? "text-slate-600" : "text-green-400")}>
-                      {transcript || interim ? <span className="animate-pulse">{transcript}<span className="text-slate-600"> {interim}</span></span> : isListening ? "AWAITING AUDIO INPUT..." : "STANDBY"}
+                    {transcript || interim ? <span className="animate-pulse">{transcript}<span className="text-slate-600"> {interim}</span></span> : isListening ? "AWAITING AUDIO INPUT..." : "STANDBY"}
                   </p>
                   {feedback && (
                     <p className={cn("text-[10px] tracking-widest uppercase flex items-center gap-1.5 mt-1", cmdStatus === "error" ? "text-red-400" : cmdStatus === "done" ? "text-emerald-400" : "text-cyan-400")}>
@@ -625,15 +625,16 @@ export default function TacticalPage() {
             </div>
 
             {/* Quick Commands */}
-            <div className="border-t border-white/10 pt-6">
+            {/* We wrap QuickCommands here, styling might need to be global, but we can just drop it in. */}
+            {/* <div className="border-t border-white/10 pt-6">
                <h3 className="text-xs font-semibold tracking-widest text-slate-300 uppercase mb-3">Quick Actions</h3>
-               {/* We wrap QuickCommands here, styling might need to be global, but we can just drop it in. */}
-               <div className="opacity-80 hover:opacity-100 transition-opacity grayscale-50 contrast-125">
+               <div className="opacity-80 hover:opacity-100 transition-opacity grayscale-[50%] contrast-125">
                   <QuickCommands disabled={isCmdActive} onCommand={executeCommand} />
                </div>
-            </div>
+            </div> */}
             {/* Footer */}
-            <div className="shrink-0 flex justify-between items-center text-[8px] text-slate-600 mt-4 tracking-widest border-t border-white/5 pt-4">
+          </div>
+            <div className="shrink-0 flex justify-between items-center text-[8px] text-slate-600 tracking-widest border-t border-white/5 mb-2 p-4">
               <span>© 2024 SIREN TACTICAL</span>
               <span className="text-green-500 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
@@ -641,7 +642,6 @@ export default function TacticalPage() {
               </span>
             </div>
 
-          </div>
         </div>
 
         {/* Space filler to push right panel when left panel collapses */}
@@ -653,7 +653,7 @@ export default function TacticalPage() {
           rightOpen ? "translate-x-0" : "translate-x-full"
         )}>
           {/* Toggle Button */}
-          <button 
+          <button
             onClick={() => setRightOpen(!rightOpen)}
             className="absolute -left-6 top-1/2 -translate-y-1/2 flex h-12 w-6 items-center justify-center rounded-l bg-black/60 border border-r-0 border-white/10 text-slate-400 hover:text-cyan-400"
           >
@@ -661,125 +661,125 @@ export default function TacticalPage() {
           </button>
 
           <div className="flex flex-col h-full p-6 text-xs uppercase tracking-wider relative">
-            
-            
+
+
             {/* Active Deployments Table */}
             <div className="border-b border-white/10 pb-6 mb-6">
-                  <h3 className="text-xs font-bold tracking-widest text-slate-300 uppercase mb-3 flex items-center gap-2">
-                    <Target className="w-4 h-4 text-cyan-400" /> Active Sorties
-                  </h3>
-                  <div className="border border-cyan-900/50 bg-black/40 rounded-sm">
-                    <Table>
-                        <TableHeader>
-                          <TableRow className="border-cyan-900/50 hover:bg-transparent">
-                            <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-slate-500">Scenario</TableHead>
-                            <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-right text-slate-500">State</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {sortedMissions.slice(0, 3).map((mission) => (
-                            <TableRow key={mission.mission_id} className="border-cyan-900/30 hover:bg-cyan-950/40 transition-colors group cursor-pointer relative" onClick={() => { setActiveMissionId(mission.mission_id); setMissionLogs([]); }}>
-                              <TableCell className="font-medium uppercase text-cyan-300 text-xs px-3 py-2">
-                                <button onClick={(e) => { e.stopPropagation(); setActiveMissionId(mission.mission_id); setMissionLogs([]); }} className="hover:text-cyan-200 flex items-center gap-1.5 focus:outline-none">
-                                  {mission.scenarios.replace(/_/g, " ")}
-                                  <Terminal className="h-3.5 w-3.5 text-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </button>
-                                <div className="text-[9px] text-slate-500 font-mono mt-0.5 w-full">{mission.mission_id.slice(0,8)}</div>
-                              </TableCell>
-                              <TableCell className="px-3 py-2">
-                                <div className="flex items-center justify-end gap-1.5 text-[10px] uppercase font-bold tracking-wider">
-                                  <span className={mission.status === "failed" ? "text-red-400" : mission.status === "complete" ? "text-green-400" : "text-blue-400"}>
-                                    {mission.status}
-                                  </span>
-                                  {getStatusIcon(mission.status)}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {sortedMissions.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={2} className="text-center py-6 text-[10px] uppercase tracking-widest text-slate-500">
-                                NO ACTIVE SORTIES
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                  </div>
-                </div>
-
-              {/* Mission Log */}
-            <div className="flex-1 flex min-h-0 flex-col">
-                <div className="flex justify-between mb-4 border-b border-white/10 pb-2 shrink-0">
-                   <span className="text-slate-300 font-bold tracking-widest flex items-center gap-2">
-                     MISSION_LOG
-                     {activeMissionId && <span className="text-cyan-500 font-mono text-[8px] border border-cyan-900/50 px-1 rounded-sm">{activeMissionId.slice(0, 8)}</span>}
-                   </span>
-                   {streamActive ? (
-                     <span className="text-cyan-600 text-[10px] animate-pulse">RECORDING...</span>
-                   ) : (
-                     <span className="text-slate-600 text-[10px]">STANDBY</span>
-                   )}
-                </div>
-
-<div ref={scrollRef} className="space-y-4 font-mono text-xs text-slate-400 overflow-y-auto no-scrollbar pb-6 flex-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
-                    {!activeMissionId && (
-                      <div className="text-center text-slate-500 mt-10 text-sm">NO SIGNAL // SELECT ACTIVE SORTIE</div>
-                    )}
-
-                    {missionLogs.map((log) => {
-                      let colorClass = "text-slate-300";
-                      let rowHtml = null;
-
-                      if (log.type === "error") colorClass = "text-red-400";
-                      if (log.type === "complete") colorClass = "text-green-400 font-bold";
-                      if (log.type === "step") colorClass = "text-cyan-300";
-
-                      if (log.type === "log" || log.type === "error" || log.type === "complete") {
-                        rowHtml = (
-                          <div key={log.id} className="flex gap-3 leading-relaxed tracking-wide">
-                            <span className="text-slate-500 shrink-0">[{log.timestamp}]</span>
-                            <span className={colorClass}>{log.message || log.debrief || log.result_summary || "EVENT TRIGGERED"}</span>
+              <h3 className="text-xs font-bold tracking-widest text-slate-300 uppercase mb-3 flex items-center gap-2">
+                <Target className="w-4 h-4 text-cyan-400" /> Active Sorties
+              </h3>
+              <div className="border border-cyan-900/50 bg-black/40 rounded-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-cyan-900/50 hover:bg-transparent">
+                      <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-slate-500">Scenario</TableHead>
+                      <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-right text-slate-500">State</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedMissions.slice(0, 3).map((mission) => (
+                      <TableRow key={mission.mission_id} className="border-cyan-900/30 hover:bg-cyan-950/40 transition-colors group cursor-pointer relative" onClick={() => { setActiveMissionId(mission.mission_id); setMissionLogs([]); }}>
+                        <TableCell className="font-medium uppercase text-cyan-300 text-xs px-3 py-2">
+                          <button onClick={(e) => { e.stopPropagation(); setActiveMissionId(mission.mission_id); setMissionLogs([]); }} className="hover:text-cyan-200 flex items-center gap-1.5 focus:outline-none">
+                            {mission.scenarios.replace(/_/g, " ")}
+                            <Terminal className="h-3.5 w-3.5 text-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </button>
+                          <div className="text-[9px] text-slate-500 font-mono mt-0.5 w-full">{mission.mission_id.slice(0, 8)}</div>
+                        </TableCell>
+                        <TableCell className="px-3 py-2">
+                          <div className="flex items-center justify-end gap-1.5 text-[10px] uppercase font-bold tracking-wider">
+                            <span className={mission.status === "failed" ? "text-red-400" : mission.status === "complete" ? "text-green-400" : "text-blue-400"}>
+                              {mission.status}
+                            </span>
+                            {getStatusIcon(mission.status)}
                           </div>
-                        );
-                      } else if (log.type === "step") {
-                        rowHtml = (
-                          <div key={log.id} className="flex flex-col gap-2 border-l-2 border-cyan-800/80 bg-cyan-950/20 p-3 ml-1 rounded-r-sm my-2">
-                            <div className="flex gap-3 text-slate-400 font-medium">
-                               <span className="shrink-0 text-slate-500">[{log.timestamp}]</span>
-                               <span className="text-cyan-400 font-bold uppercase">ACTION_STEP: {log.tool || log.phase}</span>
-                            </div>
-                            {log.reasoning && <div className="text-slate-300/90 italic leading-relaxed py-1">"{log.reasoning}"</div>}
-                            {log.result_summary && <div className={`${colorClass} font-medium pt-1`}>{">"} {log.result_summary}</div>}
-                        </div>
-                      );
-                    }
-                    return rowHtml;
-                  })}
-
-                  {streamActive && (
-                    <div className="flex gap-2 items-center mt-2">
-                      <span className="text-slate-600 shrink-0">{">"}</span>
-                      <span className="w-1.5 h-3 bg-cyan-400 animate-pulse mt-0.5"></span>
-                    </div>
-                  )}
-                </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {sortedMissions.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={2} className="text-center py-6 text-[10px] uppercase tracking-widest text-slate-500">
+                          NO ACTIVE SORTIES
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </div>
+            </div>
+
+            {/* Mission Log */}
+            <div className="flex-1 flex min-h-0 flex-col">
+              <div className="flex justify-between mb-4 border-b border-white/10 pb-2 shrink-0">
+                <span className="text-slate-300 font-bold tracking-widest flex items-center gap-2">
+                  MISSION_LOG
+                  {activeMissionId && <span className="text-cyan-500 font-mono text-[8px] border border-cyan-900/50 px-1 rounded-sm">{activeMissionId.slice(0, 8)}</span>}
+                </span>
+                {streamActive ? (
+                  <span className="text-cyan-600 text-[10px] animate-pulse">RECORDING...</span>
+                ) : (
+                  <span className="text-slate-600 text-[10px]">STANDBY</span>
+                )}
+              </div>
+
+              <div ref={scrollRef} className="space-y-4 font-mono text-xs text-slate-400 overflow-y-auto no-scrollbar pb-6 flex-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
+                {!activeMissionId && (
+                  <div className="text-center text-slate-500 mt-10 text-sm">NO SIGNAL // SELECT ACTIVE SORTIE</div>
+                )}
+
+                {missionLogs.map((log) => {
+                  let colorClass = "text-slate-300";
+                  let rowHtml = null;
+
+                  if (log.type === "error") colorClass = "text-red-400";
+                  if (log.type === "complete") colorClass = "text-green-400 font-bold";
+                  if (log.type === "step") colorClass = "text-cyan-300";
+
+                  if (log.type === "log" || log.type === "error" || log.type === "complete") {
+                    rowHtml = (
+                      <div key={log.id} className="flex gap-3 leading-relaxed tracking-wide">
+                        <span className="text-slate-500 shrink-0">[{log.timestamp}]</span>
+                        <span className={colorClass}>{log.message || log.debrief || log.result_summary || "EVENT TRIGGERED"}</span>
+                      </div>
+                    );
+                  } else if (log.type === "step") {
+                    rowHtml = (
+                      <div key={log.id} className="flex flex-col gap-2 border-l-2 border-cyan-800/80 bg-cyan-950/20 p-3 ml-1 rounded-r-sm my-2">
+                        <div className="flex gap-3 text-slate-400 font-medium">
+                          <span className="shrink-0 text-slate-500">[{log.timestamp}]</span>
+                          <span className="text-cyan-400 font-bold uppercase">ACTION_STEP: {log.tool || log.phase}</span>
+                        </div>
+                        {log.reasoning && <div className="text-slate-300/90 italic leading-relaxed py-1">"{log.reasoning}"</div>}
+                        {log.result_summary && <div className={`${colorClass} font-medium pt-1`}>{">"} {log.result_summary}</div>}
+                      </div>
+                    );
+                  }
+                  return rowHtml;
+                })}
+
+                {streamActive && (
+                  <div className="flex gap-2 items-center mt-2">
+                    <span className="text-slate-600 shrink-0">{">"}</span>
+                    <span className="w-1.5 h-3 bg-cyan-400 animate-pulse mt-0.5"></span>
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Footer Diagnostics */}
             <div className="shrink-0 border-t border-white/5 pt-4 flex justify-between items-center text-[10px] text-slate-500">
-               <div className="flex items-center gap-2">
-                  <Settings className="w-3 h-3" />
-                  DIAGNOSTICS
-               </div>
-               <span>v4.0.2-STABLE</span>
+              <div className="flex items-center gap-2">
+                <Settings className="w-3 h-3" />
+                DIAGNOSTICS
+              </div>
+              <span>v4.0.2-STABLE</span>
             </div>
 
             <div className="absolute -bottom-8 right-0 text-[8px] tracking-widest w-full flex justify-between">
-                <span>ENCRYPTION_LAYER_V4</span>
-                <span className="text-cyan-600">NODE_LATENCY_12MS</span>
+              <span>ENCRYPTION_LAYER_V4</span>
+              <span className="text-cyan-600">NODE_LATENCY_12MS</span>
             </div>
-            
+
           </div>
         </div>
 
@@ -787,6 +787,7 @@ export default function TacticalPage() {
     </div>
   );
 }
+
 
 
 
