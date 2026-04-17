@@ -26,12 +26,11 @@ import { classifyIntent, SCENARIOS } from "@/lib/drone-scenarios";
 import { CommandStatus, DroneScenario } from "@/types/drone";
 import { MissionsListResponse, ScenariosListResponse } from "@/types/api_types";
 import { QuickCommands } from "@/components/drone-command/quick-commands";
-import Header from "@/components/header";
-
 import dynamic from "next/dynamic";
 import type { Drone, Survivor, WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
 import { useWorldStream } from "@/lib/useWorldStream";
 import { MesaSimPanel } from "@/components/sim/MesaSimPanel";
+import { Grid2DViewport } from "@/components/map/Grid2DViewport";
 
 const SimulationMap3D = dynamic(() => import("@/components/map/SimulationMap3D"), { ssr: false });
 
@@ -311,7 +310,7 @@ export default function TacticalPage() {
     const scenarioId = classifyIntent(text);
     const scenario = SCENARIOS[scenarioId];
     setCmdStatus("processing");
-    setFeedback("Classifying intent�");
+    setFeedback("Classifying intent…");
     await new Promise((r) => setTimeout(r, 600));
 
     if (scenarioId === "unknown") {
@@ -329,7 +328,7 @@ export default function TacticalPage() {
     }
 
     setCmdStatus("done");
-    setFeedback(`${scenario.label} � complete`);
+    setFeedback(`${scenario.label} — complete`);
     setTimeout(() => { setCmdStatus("idle"); setFeedback(""); }, 2500);
   }, [cmdStatus]);
 
@@ -345,13 +344,9 @@ export default function TacticalPage() {
   const sortedMissions = missionsData?.missions?.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()) ?? [];
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-hidden">
-      
-      {/* ---------- HEADER ---------- */}
-      <Header />
-
+    <div className="flex h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] w-full flex-col overflow-hidden bg-background font-mono text-muted-foreground">
       {/* ---------- MAIN WORKSPACE ---------- */}
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         
           {/* Map Body */}
           <div className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
@@ -376,12 +371,13 @@ export default function TacticalPage() {
               </div>
 
               {viewMode === "2d" ? (
-                <div className="absolute inset-0 flex items-center justify-center p-8 bg-slate-950/80 overflow-auto">
-                  <div className="flex justify-center min-w-[400px] w-full max-w-[800px] aspect-square mx-auto my-auto">
-                    <div
-                      className="grid gap-px rounded-md bg-slate-800/80 p-px w-full h-full"
-                      style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
-                    >
+                <div className="absolute inset-0 z-0 flex min-h-0 flex-col bg-slate-950/90 p-2 sm:p-3">
+                  <Grid2DViewport className="min-h-0 flex-1" toolbarClassName="shrink-0">
+                    <div className="mx-auto aspect-square w-full max-w-[min(92vw,820px)] min-w-[280px]">
+                      <div
+                        className="grid h-full w-full gap-px rounded-md bg-slate-800/80 p-px shadow-[0_0_0_1px_rgba(34,211,238,0.12)]"
+                        style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
+                      >
                     {cells.map((cell) => {
                       const key = `${cell.x}-${cell.y}`;
                       const cellDrones = dronesByCell.get(key) ?? [];
@@ -402,7 +398,11 @@ export default function TacticalPage() {
                       return (
                         <div
                           key={key}
-                          className={"group relative flex aspect-square items-center justify-center transition-colors " + (isCS ? "bg-emerald-950/60" : isDepot ? "bg-sky-950/60" : "bg-slate-900")}
+                          title={`Cell (${cell.x}, ${cell.y})${isCS ? " · charging" : ""}${isDepot ? " · depot" : ""}${hasDrones ? " · drones" : ""}${hasSurvivors ? " · survivors" : ""}`}
+                          className={
+                            "group relative flex aspect-square items-center justify-center transition-colors hover:z-[1] hover:ring-1 hover:ring-cyan-400/45 " +
+                            (isCS ? "bg-emerald-950/60" : isDepot ? "bg-sky-950/60" : "bg-slate-900")
+                          }
                         >
                           {heatVal != null && (
                             <div
@@ -445,8 +445,9 @@ export default function TacticalPage() {
                         </div>
                       );
                     })}
+                      </div>
                     </div>
-                  </div>
+                  </Grid2DViewport>
                 </div>
               ) : (
                 <SimulationMap3D
@@ -461,7 +462,7 @@ export default function TacticalPage() {
               )}
 
               {/* ----- MAP LEGEND ----- */}
-              <div className="absolute bottom-6 left-6 z-50 bg-black/60 backdrop-blur-md border border-cyan-900/50 p-4 px-6 rounded-sm flex gap-8 text-[10px] uppercase font-mono text-slate-400 select-none shadow-[0_0_15px_rgba(8,145,178,0.15)] hidden lg:flex transition-opacity duration-300 hover:bg-black/80">
+              <div className="absolute bottom-6 left-6 z-50 hidden gap-8 rounded-sm border border-cyan-900/50 bg-black/60 p-4 px-6 font-mono text-[10px] uppercase text-slate-400 shadow-[0_0_15px_rgba(8,145,178,0.15)] backdrop-blur-md transition-opacity duration-300 select-none hover:bg-black/80 lg:flex">
                 <div className="flex flex-col gap-2.5">
                   <span className="text-cyan-500 font-bold mb-1 tracking-widest">Drones</span>
                   <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-cyan-400" /> Active</div>

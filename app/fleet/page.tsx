@@ -12,8 +12,6 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-import Header from "@/components/header";
-
 // ─── Static fleet metadata (merges with live API data) ───────────────────────
 
 const FLEET_META: Record<string, {
@@ -708,9 +706,8 @@ export default function DroneFleetPage() {
     }, [droneData]);
 
     return (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-hidden">
-            <Header />
-            <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "#060b14" }}>
+        <div className="flex h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] w-full flex-col overflow-hidden bg-background font-mono text-muted-foreground">
+            <div className="siren-grid-bg flex min-h-0 flex-1 flex-col overflow-hidden">
             {selected ? (
                 <ShowcaseView drone={selected} onBack={() => setSelected(null)} />
             ) : (

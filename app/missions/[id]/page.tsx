@@ -169,7 +169,7 @@ export default function LiveMissionConsole() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" asChild>
-          <Link href="/map">
+          <Link href="/tactical">
             <ChevronLeft className="h-4 w-4" />
           </Link>
         </Button>

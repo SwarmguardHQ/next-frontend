@@ -17,10 +17,6 @@ export type MesaSimPanelProps = {
   className?: string;
 };
 
-/**
- * Mesa / ABM layer from `GET /world/stream` (`sim_visual`).
- * When `sim_visual` is null, the API is not exposing the Mesa bridge (e.g. `USE_MESA_SIM` off).
- */
 export function MesaSimPanel({
   variant = "card",
   simVisual,
@@ -33,21 +29,18 @@ export function MesaSimPanel({
   const step = onMesaStep && showStepButton;
 
   const offBody = (
-    <div className="space-y-1 text-[11px] leading-relaxed text-slate-500">
+    <div className="space-y-2 text-[11px] leading-relaxed text-slate-500">
       {!streamLive && (
         <p>
-          World stream is not connected (SSE). Open any page that uses{" "}
-          <code className="rounded bg-slate-800/90 px-1 text-sky-300/90">useWorldStream</code> and ensure
-          the API is reachable.
+          World SSE is offline — check the API and{" "}
+          <code className="rounded bg-slate-800/90 px-1 text-sky-300/90">NEXT_PUBLIC_BACKEND_ORIGIN</code>.
         </p>
       )}
       {streamLive && !simVisual && (
         <p>
-          The API is sending ticks without a Mesa layer (<code className="rounded bg-slate-800/90 px-1">sim_visual: null</code>
-          ). To drive the UI simulation: set{" "}
-          <code className="rounded bg-slate-800/90 px-1 text-amber-200/90">USE_MESA_SIM=1</code> on the backend,
-          install Mesa extras and <code className="rounded bg-slate-800/90 px-1">drone-sim</code>, then restart
-          the API.
+          Mesa layer off (<code className="rounded bg-slate-800/90 px-1">sim_visual: null</code>). Set{" "}
+          <code className="rounded bg-slate-800/90 px-1 text-amber-200/90">USE_MESA_SIM=1</code>, install Mesa extras +
+          drone-sim, restart the API — see repo <code className="rounded bg-slate-800/90 px-1">AGENTS.md</code>.
         </p>
       )}
     </div>
@@ -91,7 +84,7 @@ export function MesaSimPanel({
       <div className={cn("rounded-lg border border-violet-500/25 bg-[#111827] p-5 shadow-[0_0_0_1px_rgba(139,92,246,0.15)]", className)}>
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold tracking-wide text-violet-200">
           <Radar className="h-4 w-4" />
-          Mesa simulation (UI layer)
+          Mesa layer
         </div>
         {simVisual ? (
           <div className="space-y-3">
