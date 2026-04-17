@@ -344,14 +344,14 @@ export default function TacticalPage() {
   const sortedMissions = missionsData?.missions?.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()) ?? [];
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] w-full flex-col overflow-hidden bg-background font-mono text-muted-foreground">
+    <div className="fixed top-16 left-0 right-0 bottom-0 flex flex-col overflow-hidden bg-background font-mono text-muted-foreground">
       {/* ---------- MAIN WORKSPACE ---------- */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         
           {/* Map Body */}
           <div className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
             <div className="relative flex-1">
-              <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+              <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2">
                 <div className="flex rounded-md border border-cyan-900/50 bg-black/60 p-1 backdrop-blur-md">
                     <button
                       type="button"
