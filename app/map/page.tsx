@@ -22,8 +22,10 @@ import {
   Survivor,
   MissionsListResponse,
   ScenariosListResponse,
+  WorldStreamSimVisual,
   WorldStreamTickPayload,
 } from "@/types/api_types";
+import { MesaSimPanel } from "@/components/sim/MesaSimPanel";
 import { cn } from "@/lib/utils";
 
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
@@ -178,33 +180,19 @@ export default function SimulationMapPage() {
   const [{ drones, survivors }, setState] = useState(() => createDemoState());
   const [viewMode, setViewMode] = useState<ViewMode>("2d");
   const [pulse, setPulse] = useState(0);
-  const [simHeat, setSimHeat] = useState<number[][] | null>(null);
-  const [simMeta, setSimMeta] = useState<{
-    mesa_step: number;
-    mesa_coverage_pct: number;
-    confirmed_survivors: number;
-    pending_detections: number;
-  } | null>(null);
-
+  const [simVisual, setSimVisual] = useState<WorldStreamSimVisual | null>(null);
   const [mesaBusy, setMesaBusy] = useState(false);
+
+  const simHeat = useMemo(() => {
+    const h = simVisual?.heatmap;
+    return h?.length ? h : null;
+  }, [simVisual]);
 
   const { droneData, survivorData, worldStreamLive, refetch } = useWorldStream({
     intervalMs: 500,
     pollingMs: 5000,
     onStreamTick: (p: WorldStreamTickPayload) => {
-      const v = p.sim_visual;
-      if (v?.heatmap?.length) setSimHeat(v.heatmap);
-      else setSimHeat(null);
-      if (v) {
-        setSimMeta({
-          mesa_step: v.mesa_step,
-          mesa_coverage_pct: v.mesa_coverage_pct,
-          confirmed_survivors: v.confirmed_survivors,
-          pending_detections: v.pending_detections,
-        });
-      } else {
-        setSimMeta(null);
-      }
+      setSimVisual(p.sim_visual ?? null);
     },
   });
 
@@ -367,11 +355,27 @@ export default function SimulationMapPage() {
                   3D
                 </button>
             </div>
-            <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
-              <Wifi className="h-3 w-3 mr-1" /> LIVE STREAM
+            <Badge
+              className={
+                worldStreamLive
+                  ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
+                  : "border border-slate-500/40 bg-slate-500/10 text-slate-400"
+              }
+            >
+              <Wifi className="h-3 w-3 mr-1" />{" "}
+              {worldStreamLive ? "LIVE STREAM" : "REST"}
             </Badge>
           </div>
         </div>
+
+        <MesaSimPanel
+          variant="inline"
+          simVisual={simVisual}
+          streamLive={worldStreamLive}
+          mesaBusy={mesaBusy}
+          onMesaStep={handleMesaStep}
+          className="mb-3 w-full max-w-[980px]"
+        />
 
         {/* Live Drone Fleet Strip */}
         {drones.length > 0 && (
@@ -555,9 +559,8 @@ Drone States</p>
                     Simulation
                   </p>
                   <p className="text-[10px] leading-relaxed text-slate-500">
-                    Cyan cell tint / 3D columns follow <span className="text-sky-400/90">sim_visual</span> when the
-                    backend runs with Mesa enabled. Use <span className="text-sky-400/90">+1 step</span> to advance the
-                    ABM between stream ticks.
+                    Cyan tint / 3D columns come from stream <span className="text-sky-400/90">sim_visual</span> when
+                    Mesa is enabled. Full explanation: header <span className="text-sky-400/90">SIM</span> page.
                   </p>
                 </CardContent>
               </Card>

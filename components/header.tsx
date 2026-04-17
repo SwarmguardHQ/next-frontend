@@ -17,6 +17,7 @@ import {
   Package,
   PanelLeft,
   Cpu,
+  Layers,
   Settings,
   User,
   Bell,
@@ -35,6 +36,7 @@ export default function Header() {
     { href: "/", icon: Home, label: "HOME" },
     { href: "/tactical", icon: LineChart, label: "MAP" },
     { href: "/fleet", icon: Cpu, label: "FLEET" },
+    { href: "/simulation", icon: Layers, label: "SIM" },
   ];
 
   return (

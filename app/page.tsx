@@ -47,7 +47,7 @@ import {
 import { useWorldStream } from "@/lib/useWorldStream";
 import { api } from "@/lib/api";
 import type { WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
-import { Button } from "@/components/ui/button";
+import { MesaSimPanel } from "@/components/sim/MesaSimPanel";
 
 // ─── Stream types ──────────────────────────────────────────────────────────────
 type StreamPoint = {
@@ -416,37 +416,13 @@ export default function DashboardPage() {
               />
             </div>
           </div>
-          {simVisual && (
-            <div className="space-y-2 border-t border-slate-700/50 pt-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
-                <span className="tracking-widest uppercase text-violet-300/90">Mesa ABM sweep</span>
-                <span className="tabular-nums font-bold text-white">
-                  {simVisual.mesa_coverage_pct.toFixed(1)}%
-                </span>
-              </div>
-              <div className="h-2 rounded-full bg-slate-800">
-                <div
-                  className="h-2 rounded-full bg-violet-400/90 transition-all"
-                  style={{ width: `${Math.min(100, simVisual.mesa_coverage_pct)}%` }}
-                />
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
-                <span>
-                  Confirmed {simVisual.confirmed_survivors} · Pending {simVisual.pending_detections}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 border-violet-500/35 bg-slate-900/80 text-[10px] text-violet-100 hover:bg-violet-950/50"
-                  disabled={mesaBusy}
-                  onClick={() => void handleMesaStep()}
-                >
-                  {mesaBusy ? "…" : "+1 Mesa step"}
-                </Button>
-              </div>
-            </div>
-          )}
+          <MesaSimPanel
+            variant="card"
+            simVisual={simVisual}
+            streamLive={worldStreamLive}
+            mesaBusy={mesaBusy}
+            onMesaStep={handleMesaStep}
+          />
         </CardContent>
       </Card>
 

@@ -29,7 +29,9 @@ import { QuickCommands } from "@/components/drone-command/quick-commands";
 import Header from "@/components/header";
 
 import dynamic from "next/dynamic";
-import { Drone, Survivor } from "@/types/api_types";
+import type { Drone, Survivor, WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
+import { useWorldStream } from "@/lib/useWorldStream";
+import { MesaSimPanel } from "@/components/sim/MesaSimPanel";
 
 const SimulationMap3D = dynamic(() => import("@/components/map/SimulationMap3D"), { ssr: false });
 
@@ -146,15 +148,40 @@ export default function TacticalPage() {
   const [cmdStatus, setCmdStatus] = useState<CommandStatus>("idle");
   const [feedback, setFeedback] = useState("");
 
-  useEffect(() => {
-    const fetchMap = async () => {
-      try {
-        const [dRes, sRes] = await Promise.all([api.world.getDrones(), api.world.getSurvivors()]);
-        setDrones(dRes.drones || []);
-        setSurvivors(sRes.survivors || []);
-      } catch (e) {}
-    };
+  const [simVisual, setSimVisual] = useState<WorldStreamSimVisual | null>(null);
+  const [mesaBusy, setMesaBusy] = useState(false);
+  const simHeat = useMemo(() => {
+    const h = simVisual?.heatmap;
+    return h?.length ? h : null;
+  }, [simVisual]);
 
+  const { droneData, survivorData, worldStreamLive, refetch } = useWorldStream({
+    intervalMs: 500,
+    pollingMs: 5000,
+    onStreamTick: (p: WorldStreamTickPayload) => {
+      setSimVisual(p.sim_visual ?? null);
+    },
+  });
+
+  useEffect(() => {
+    if (!droneData?.drones?.length) return;
+    setDrones(droneData.drones);
+    if (survivorData?.survivors) setSurvivors(survivorData.survivors);
+  }, [droneData, survivorData]);
+
+  const handleMesaStep = useCallback(async () => {
+    setMesaBusy(true);
+    try {
+      await api.world.mesaStep(1);
+      await refetch();
+    } catch {
+      /* optional Mesa */
+    } finally {
+      setMesaBusy(false);
+    }
+  }, [refetch]);
+
+  useEffect(() => {
     const fetchMissions = async () => {
       try {
         const [mRes, scRes] = await Promise.all([api.missions.list(), api.scenarios.list()]);
@@ -163,7 +190,6 @@ export default function TacticalPage() {
       } catch (e) {}
     };
 
-    fetchMap();
     fetchMissions();
 
     const fetchGrid = async () => {
@@ -180,9 +206,10 @@ export default function TacticalPage() {
     };
     fetchGrid();
 
-    const mapId = setInterval(fetchMap, 800);
     const missionId = setInterval(fetchMissions, 5000);
-    return () => { clearInterval(mapId); clearInterval(missionId); };
+    return () => {
+      clearInterval(missionId);
+    };
   }, []);
 
   const [activeMissionId, setActiveMissionId] = useState<string | null>(null);
@@ -364,11 +391,28 @@ export default function TacticalPage() {
                       const hasDrones = cellDrones.length > 0;
                       const hasSurvivors = cellSurvivors.length > 0;
 
+                      const heatVal =
+                        simHeat != null &&
+                        Array.isArray(simHeat[cell.y]) &&
+                        simHeat[cell.y][cell.x] != null &&
+                        Number.isFinite(simHeat[cell.y][cell.x])
+                          ? Number(simHeat[cell.y][cell.x])
+                          : null;
+
                       return (
                         <div
                           key={key}
                           className={"group relative flex aspect-square items-center justify-center transition-colors " + (isCS ? "bg-emerald-950/60" : isDepot ? "bg-sky-950/60" : "bg-slate-900")}
                         >
+                          {heatVal != null && (
+                            <div
+                              className="pointer-events-none absolute inset-0 rounded-[2px]"
+                              style={{
+                                backgroundColor: `rgba(56, 189, 248, ${0.1 + heatVal * 0.45})`,
+                              }}
+                              aria-hidden
+                            />
+                          )}
                           {isCS && (
                             <div className="absolute left-0.5 top-0.5 flex items-center justify-center rounded bg-emerald-500/25 p-0.5 ring-1 ring-emerald-400/60">
                               <BatteryCharging className="h-3 w-3 text-emerald-400" />
@@ -412,6 +456,7 @@ export default function TacticalPage() {
                   gridSize={gridSize}
                   chargingStations={infra.chargingStations}
                   supplyDepots={infra.supplyDepots}
+                  simHeat={simHeat}
                 />
               )}
 
@@ -459,6 +504,23 @@ export default function TacticalPage() {
             <div>
               <h2 className="text-xl font-bold text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.4)]">MISSION_CTRL</h2>
               <p className="text-[10px] tracking-widest text-slate-500 mt-1 uppercase">OP_ID: ALPHA_9</p>
+              <p className="mt-2 text-[9px] tracking-widest text-slate-600 uppercase">
+                World SSE:{" "}
+                <span className={worldStreamLive ? "text-emerald-400" : "text-amber-500/90"}>
+                  {worldStreamLive ? "live" : "fallback"}
+                </span>
+              </p>
+            </div>
+
+            <div className="rounded-sm border border-cyan-900/40 bg-black/40 p-3">
+              <MesaSimPanel
+                variant="card"
+                simVisual={simVisual}
+                streamLive={worldStreamLive}
+                mesaBusy={mesaBusy}
+                onMesaStep={handleMesaStep}
+                className="!border-t-0 !pt-0"
+              />
             </div>
 
             {/* Deploy Scenario Component */}
