@@ -4,15 +4,13 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import { cn } from "@/lib/utils";
 import { useWorldStream } from "@/lib/useWorldStream";
-import { Drone } from "@/types/api_types";
+import type { Drone, WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
 import {
     ArrowLeft, Zap, Wind, Weight, Navigation, Cpu, Radio,
     Camera, Shield, ChevronRight, Eye, Activity, RadioReceiver,
     Radar, Fan, Battery, Wifi, WifiOff,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-
-import Header from "@/components/header";
 
 // ─── Static fleet metadata (merges with live API data) ───────────────────────
 
@@ -688,8 +686,15 @@ function attachDefaultSensors(d: Drone): Drone {
 export default function DroneFleetPage() {
     const [drones, setDrones] = useState<Drone[]>([]);
     const [selected, setSelected] = useState<Drone | null>(null);
+    const [simVisual, setSimVisual] = useState<WorldStreamSimVisual | null>(null);
 
-    const { droneData, worldStreamLive, apiError } = useWorldStream({ intervalMs: 500, pollingMs: 5000 });
+    const { droneData, worldStreamLive, apiError } = useWorldStream({
+        intervalMs: 500,
+        pollingMs: 5000,
+        onStreamTick: (p: WorldStreamTickPayload) => {
+            setSimVisual(p.sim_visual ?? null);
+        },
+    });
 
     useEffect(() => {
         if (!droneData?.drones) return;
@@ -701,9 +706,8 @@ export default function DroneFleetPage() {
     }, [droneData]);
 
     return (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-hidden">
-            <Header />
-            <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "#060b14" }}>
+        <div className="flex h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] w-full flex-col overflow-hidden bg-background font-mono text-muted-foreground">
+            <div className="siren-grid-bg flex min-h-0 flex-1 flex-col overflow-hidden">
             {selected ? (
                 <ShowcaseView drone={selected} onBack={() => setSelected(null)} />
             ) : (
@@ -719,6 +723,14 @@ export default function DroneFleetPage() {
                             <span className={worldStreamLive ? "text-emerald-400" : "text-amber-400/90"}>
                                 {worldStreamLive ? "WORLD SSE" : apiError ? "offline" : "REST"}
                             </span>
+                            {simVisual && worldStreamLive && (
+                                <>
+                                    {" · "}
+                                    <span className="text-violet-300/90">
+                                        Mesa step {simVisual.mesa_step} · cov {simVisual.mesa_coverage_pct.toFixed(0)}%
+                                    </span>
+                                </>
+                            )}
                         </p>
                     </div>
                     {drones.length === 0 ? (

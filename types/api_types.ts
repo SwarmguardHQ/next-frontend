@@ -101,6 +101,14 @@ export interface WorldStreamTickPayload {
   sim_visual: WorldStreamSimVisual | null;
 }
 
+/** POST /world/mesa/step — advance cached DisasterZone */
+export interface MesaStepResponse {
+  mesa_step: number;
+  confirmed_survivors: number;
+  coverage_pct: number;
+  pulled_to_world?: boolean;
+}
+
 export interface Scenario {
   name: string;
   prompt_preview?: string;

@@ -80,7 +80,8 @@ import type {
   MissionStatusResponse,
   MissionRequest,
   ScenariosListResponse,
-  ScenarioDetailResponse
+  ScenarioDetailResponse,
+  MesaStepResponse,
 } from "../types/api_types";
 
 export const api = {
@@ -91,6 +92,11 @@ export const api = {
     getSurvivors: () => ApiClient.get<SurvivorsResponse>("/world/survivors"),
     getMeshLog: () => ApiClient.get<MeshLogResponse>("/world/mesh-log"),
     reset: () => ApiClient.post<{status: string, message: string}>("/world/reset"),
+    /** Advance Mesa by N steps; syncs WorldState when USE_MESA_SIM=1 on backend */
+    mesaStep: (steps = 1) =>
+      ApiClient.post<MesaStepResponse>("/world/mesa/step", { steps }),
+    mesaReset: () =>
+      ApiClient.post<{ status: string; message: string }>("/world/mesa/reset"),
   },
 
   missions: {

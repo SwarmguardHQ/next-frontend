@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="SIREN">
+  <rect width="64" height="64" rx="8" fill="#09090b" stroke="#fafafa" stroke-width="3"/>
+  <circle cx="32" cy="32" r="14" stroke="#06b6d4" stroke-width="2.5" fill="none"/>
+  <circle cx="32" cy="32" r="4" fill="#06b6d4"/>
+  <path d="M32 10v8M32 46v8M10 32h8M46 32h8" stroke="#fafafa" stroke-width="2" stroke-linecap="square"/>
+  <path d="M18 18l6 6M40 40l6 6M46 18l-6 6M24 40l-6 6" stroke="#06b6d4" stroke-width="1.5" stroke-linecap="square" opacity="0.85"/>
+</svg>

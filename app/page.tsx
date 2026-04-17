@@ -50,6 +50,8 @@ import {
 } from "@/components/ui/table";
 import { useWorldStream } from "@/lib/useWorldStream";
 import { api } from "@/lib/api";
+import type { WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
+import { MesaSimPanel } from "@/components/sim/MesaSimPanel";
 
 // ─── Stream types ──────────────────────────────────────────────────────────────
 type StreamPoint = {
@@ -73,14 +75,14 @@ const MAX_POINTS = 48;
 const START_TIME = Date.now() - MAX_POINTS * 2000;
 
 const T = {
-  card: "#111827",
-  border: "rgba(61,158,228,0.35)",
-  textDim: "#64748b",
-  blue: "#3d9ee4",
+  card: "#18181b",
+  border: "rgba(63, 63, 70, 0.9)",
+  textDim: "#a1a1aa",
+  blue: "#06b6d4",
   green: "#22c55e",
-  amber: "#f59e0b",
+  amber: "#eab308",
   red: "#ef4444",
-  purple: "#a855f7",
+  purple: "#71717a",
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -152,8 +154,6 @@ function getStatusColor(status: string) {
   }
 }
 
-import Header from "@/components/header";
-
 // ─── Static chart data ─────────────────────────────────────────────────────────
 const HIGH_RISK_ZONES = [
   { sector: "Sector Alpha", riskScore: 88, full: "Sector Alpha (NW)" },
@@ -202,13 +202,29 @@ export default function DashboardPage() {
   }, []);
 
   // ── Telemetry mount + seed events ──
-  const { droneData, survivorData, worldMetrics, worldStreamLive, apiError, apiLoading } =
+  const [simVisual, setSimVisual] = useState<WorldStreamSimVisual | null>(null);
+  const [mesaBusy, setMesaBusy] = useState(false);
+
+  const { droneData, survivorData, worldMetrics, worldStreamLive, apiError, apiLoading, refetch } =
     useWorldStream({
       onPollMeshLog: applyMeshTailToEvents,
-      onStreamTick: (data) => {
+      onStreamTick: (data: WorldStreamTickPayload) => {
         if (data.mesh_log?.length) applyMeshTailToEvents(data.mesh_log);
+        setSimVisual(data.sim_visual ?? null);
       },
     });
+
+  const handleMesaStep = useCallback(async () => {
+    setMesaBusy(true);
+    try {
+      await api.world.mesaStep(1);
+      await refetch();
+    } catch {
+      /* Mesa optional */
+    } finally {
+      setMesaBusy(false);
+    }
+  }, [refetch]);
 
   // ── Telemetry mount ──
   useEffect(() => {
@@ -292,6 +308,14 @@ export default function DashboardPage() {
   const totalSurvivors = survivorData?.survivors.length ?? 0;
   const rescuedCount = survivorData?.survivors.filter(s => s.rescued).length ?? 0;
   const criticalUnrescued = prioritySurvivors.filter(s => s.condition === "critical").length;
+  const riskBand =
+    current.risk >= 70 ? "CRITICAL" : current.risk >= 45 ? "ELEVATED" : "STABLE";
+  const missionStatus =
+    riskBand === "CRITICAL"
+      ? "Critical Response"
+      : riskBand === "ELEVATED"
+        ? "Heightened Monitoring"
+        : "Stabilization In Progress";
   
   // Mission progress: 50% weighted by geographic coverage, 50% by survivor rescue completeness.
   const missionProgress = totalSurvivors > 0 
@@ -327,21 +351,26 @@ export default function DashboardPage() {
   const avgRecoveryTime = (12 + (offlineCount * 2.5)).toFixed(1);
 
   if (!mounted) {
-    return <div className="fixed inset-0 z-[100] flex flex-col bg-black animate-pulse" />;
+    return (
+      <div className="flex min-h-[calc(100dvh-4rem)] w-full animate-pulse bg-background" />
+    );
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-auto">
-      <Header />
-      <div className="flex-1 p-4 sm:p-6 space-y-4 max-w-[1600px] w-full mx-auto pb-24">
+    <div className="siren-grid-bg flex min-h-[calc(100dvh-4rem)] w-full flex-col overflow-y-auto font-mono text-muted-foreground">
+      <div className="mx-auto w-full max-w-[1600px] flex-1 space-y-4 p-4 pb-16 sm:p-6">
 
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-wide sm:text-3xl">Swarm Command Dashboard</h2>
-          <p className="text-xs tracking-widest text-slate-400 uppercase">Real-time fleet intelligence & mission analytics</p>
+      {/* ── Page title + status ── */}
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            Command dashboard
+          </h2>
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+            Fleet intelligence · live world stream
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge
             className={
               worldStreamLive
@@ -355,15 +384,70 @@ export default function DashboardPage() {
           <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
             <Radar className="h-3 w-3" /> OFFLINE CAPABLE
           </Badge>
-          <Badge className="border border-emerald-400/40 bg-emerald-500/10 text-emerald-300"><Wifi className="h-3 w-3" /> LIVE LINK</Badge>
-          <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300"><Target className="h-3 w-3" /> AI ALLOCATION</Badge>
+          <Badge className="border border-emerald-400/40 bg-emerald-500/10 text-emerald-300">
+            <Wifi className="h-3 w-3" /> LIVE LINK
+          </Badge>
+          <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
+            <Target className="h-3 w-3" /> AI ALLOCATION
+          </Badge>
           {apiError && (
             <Badge className="border border-amber-400/40 bg-amber-500/10 text-amber-300">
               <WifiOff className="h-3 w-3" /> DEMO DATA
             </Badge>
           )}
+          {simVisual && worldStreamLive && (
+            <Badge className="border border-violet-400/40 bg-violet-500/10 text-violet-200">
+              <Radar className="h-3 w-3" /> MESA step {simVisual.mesa_step}
+            </Badge>
+          )}
         </div>
       </div>
+
+      {/* ── Mission State ── */}
+      <Card className="border-t-4 border-t-cyan-500 shadow-[4px_4px_0_0_var(--nb-shadow-accent)]">
+        <CardContent className="space-y-4 pt-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] tracking-[0.16em] text-slate-400 uppercase">Live Mission Command State</p>
+              <p className="mt-1 text-2xl font-bold tracking-wide text-white">{missionStatus}</p>
+            </div>
+            <Badge
+              className={`border ${
+                riskBand === "CRITICAL"
+                  ? "border-red-400/50 bg-red-500/15 text-red-300"
+                  : riskBand === "ELEVATED"
+                    ? "border-amber-400/50 bg-amber-500/15 text-amber-300"
+                    : "border-emerald-400/50 bg-emerald-500/15 text-emerald-300"
+              }`}
+            >
+              RISK {riskBand}
+            </Badge>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span className="tracking-widest uppercase">Area Closure Progress</span>
+              <span className="tabular-nums font-bold text-white">{current.coverage.toFixed(1)}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-800">
+              <div
+                className={`h-2 rounded-full transition-all ${
+                  current.coverage >= 85 ? "bg-emerald-400"
+                  : current.coverage >= 70 ? "bg-sky-400"
+                  : "bg-amber-400"
+                }`}
+                style={{ width: `${current.coverage}%` }}
+              />
+            </div>
+          </div>
+          <MesaSimPanel
+            variant="card"
+            simVisual={simVisual}
+            streamLive={worldStreamLive}
+            mesaBusy={mesaBusy}
+            onMesaStep={handleMesaStep}
+          />
+        </CardContent>
+      </Card>
 
       {/* ── 4 KPI Cards ── */}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -442,7 +526,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* System Fault Recovery */}
-        <Card className="border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.2)] flex flex-col p-3 items-center justify-center text-center">
+        <Card className="flex flex-col items-center justify-center p-3 text-center">
             <p className="text-[10px] tracking-[0.1em] text-slate-400 uppercase mb-0.5 flex items-center justify-center gap-1.5">
               <Activity className="w-3 h-3 text-sky-400" />
               Drone Failures
@@ -468,7 +552,7 @@ export default function DashboardPage() {
         <div className="xl:col-span-2 space-y-4">
           
           {/* Decision Latency Timeline */}
-          <Card className="border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.22)]">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base tracking-wide text-white">System Telemetry & Actions</CardTitle>
             </CardHeader>
@@ -496,7 +580,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Fleet Distribution Donuts */}
-          <Card className="border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.22)] flex flex-col">
+          <Card className="flex flex-col">
             <CardHeader className="pb-0">
               <CardTitle className="text-base tracking-wide text-white">Fleet Distribution Overview</CardTitle>
             </CardHeader>
@@ -505,8 +589,8 @@ export default function DashboardPage() {
                 {/* 1. Status Donut */}
                 <div className="flex flex-col items-center">
                   <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mb-1">Status</span>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                  <div className="h-[150px] w-full min-w-0 min-h-[150px] flex items-center justify-center">
+                      <PieChart width={220} height={150}>
                       <Pie                          isAnimationActive={false}                        data={Object.entries((droneData?.drones ?? []).reduce((acc, d) => {
                           const s = d.status ? d.status.toLowerCase() : "unknown";
                           acc[s] = (acc[s] || 0) + 1;
@@ -530,8 +614,8 @@ export default function DashboardPage() {
                         contentStyle={{ backgroundColor: '#111827', borderColor: 'rgba(61,158,228,0.2)' }}
                         itemStyle={{ color: '#f1f5f9', fontSize: '12px' }}
                       />
-                    </PieChart>
-                  </ResponsiveContainer>
+                      </PieChart>
+                  </div>
                   <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 mt-1">
                     {Object.entries((droneData?.drones ?? []).reduce((acc, d) => {
                       const s = d.status ? d.status.toLowerCase() : "unknown";
@@ -552,8 +636,8 @@ export default function DashboardPage() {
                 {/* 2. Battery Donut */}
                 <div className="flex flex-col items-center">
                   <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mb-1">Battery Level</span>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                  <div className="h-[150px] w-full min-w-0 min-h-[150px] flex items-center justify-center">
+                      <PieChart width={220} height={150}>
                       <Pie                          isAnimationActive={false}                        data={[
                           { name: "High (>50%)", value: (droneData?.drones ?? []).filter(d => d.battery > 50).length },
                           { name: "Medium (25-50%)", value: (droneData?.drones ?? []).filter(d => d.battery > 25 && d.battery <= 50).length },
@@ -577,8 +661,8 @@ export default function DashboardPage() {
                         contentStyle={{ backgroundColor: '#111827', borderColor: 'rgba(61,158,228,0.2)' }}
                         itemStyle={{ color: '#f1f5f9', fontSize: '12px' }}
                       />
-                    </PieChart>
-                  </ResponsiveContainer>
+                      </PieChart>
+                  </div>
                   <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-1">
                     {[
                       { name: "High (>50%)", value: (droneData?.drones ?? []).filter(d => d.battery > 50).length },
@@ -599,8 +683,8 @@ export default function DashboardPage() {
                 {/* 3. Sector Donut */}
                 <div className="flex flex-col items-center">
                   <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mb-1">Sector Location</span>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                  <div className="h-[150px] w-full min-w-0 min-h-[150px] flex items-center justify-center">
+                      <PieChart width={220} height={150}>
                       <Pie                          isAnimationActive={false}                        data={Object.entries((droneData?.drones ?? []).reduce((acc, d) => {
                           const s = d.assigned_sector || "Unassigned";
                           acc[s] = (acc[s] || 0) + 1;
@@ -624,8 +708,8 @@ export default function DashboardPage() {
                         contentStyle={{ backgroundColor: '#111827', borderColor: 'rgba(61,158,228,0.2)' }}
                         itemStyle={{ color: '#f1f5f9', fontSize: '12px' }}
                       />
-                    </PieChart>
-                  </ResponsiveContainer>
+                      </PieChart>
+                  </div>
                   <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 mt-1">
                     {Object.entries((droneData?.drones ?? []).reduce((acc, d) => {
                       const s = d.assigned_sector || "Unassigned";
@@ -647,7 +731,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* ── Active Fleet Table ── */}
-          <Card className="border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.22)] flex flex-col">
+          <Card className="flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div>
               <CardTitle className="text-base tracking-wide text-white">Active Fleet & Battery Management</CardTitle>
@@ -723,7 +807,7 @@ export default function DashboardPage() {
         {/* RIGHT/SIDEBAR COLUMN (Takes up 1 grid slot) */}
         <div className="space-y-4">
           {/* Priority Survivors Columned Card */}
-          <Card className="flex flex-col border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.22)]">
+          <Card className="flex flex-col">
             <CardHeader className="pb-2">
               <CardTitle className="text-base tracking-wide text-white flex justify-between items-center">
                 Active Survivors Triage <Users className="w-4 h-4 text-cyan-400" />
@@ -778,7 +862,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Scenario Confidence (Grid Version) */}
-          <Card className="flex flex-col border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.22)]">
+          <Card className="flex flex-col">
             <CardHeader>
               <CardTitle className="text-base tracking-wide text-white flex justify-between items-center">
                 Confidence Score <Target className="w-4 h-4 text-purple-400" />
@@ -801,7 +885,7 @@ export default function DashboardPage() {
           </Card>
 
 {/* Critical Alerts */}
-            <Card className="flex flex-col border border-red-500/20 bg-[#111827] shadow-[0_0_0_1px_rgba(239,68,68,0.22)]">
+            <Card className="flex flex-col border-t-4 border-t-destructive shadow-[4px_4px_0_0_rgb(127_29_29)]">
               <CardHeader>
                 <CardTitle className="text-base tracking-wide text-white flex justify-between items-center">
                   Critical Alerts <AlertTriangle className="w-4 h-4 text-red-400" />

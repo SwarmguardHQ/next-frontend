@@ -26,6 +26,8 @@ const INITIAL_VIEW = {
 
 type Color4 = [number, number, number, number];
 
+type MesaHeatCell = { x: number; y: number; v: number };
+
 type SelectedObject =
   | { kind: "drone"; data: Drone }
   | { kind: "survivor"; data: Survivor }
@@ -53,6 +55,8 @@ interface Props {
   gridSize: number;
   chargingStations: InfraItem[];
   supplyDepots: InfraItem[];
+  /** Normalized 0–1 thermal grid from GET /world/stream sim_visual (Mesa); optional */
+  simHeat?: number[][] | null;
 }
 
 function droneColor(status: string): Color4 {
@@ -138,6 +142,7 @@ export default function SimulationMap3D({
   gridSize,
   chargingStations,
   supplyDepots,
+  simHeat = null,
 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [selected, setSelected] = useState<SelectedObject>(null);
@@ -166,6 +171,23 @@ export default function SimulationMap3D({
     return lines;
   }, [gridSize, toCoord]);
 
+  const mesaHeatCells = useMemo((): MesaHeatCell[] => {
+    if (!simHeat?.length) return [];
+    const out: MesaHeatCell[] = [];
+    const gh = Math.min(gridSize, simHeat.length);
+    for (let y = 0; y < gh; y++) {
+      const row = simHeat[y];
+      if (!Array.isArray(row)) continue;
+      const gw = Math.min(gridSize, row.length);
+      for (let x = 0; x < gw; x++) {
+        const v = Number(row[x]);
+        if (!Number.isFinite(v) || v < 0.02) continue;
+        out.push({ x, y, v });
+      }
+    }
+    return out;
+  }, [simHeat, gridSize]);
+
   useEffect(() => { setMounted(true); }, []);
 
   const handleMapLoad = useCallback((evt: MapLoadEvt) => {
@@ -188,6 +210,27 @@ export default function SimulationMap3D({
       capRounded: true,
       jointRounded: true,
     }),
+
+    ...(mesaHeatCells.length
+      ? [
+          new ColumnLayer<MesaHeatCell>({
+            id: "mesa-sim-thermal",
+            data: mesaHeatCells,
+            getPosition: (d) => toCoord(d.x, d.y),
+            diskResolution: 10,
+            radius: 22,
+            extruded: true,
+            getElevation: (d) => 6 + d.v * 90,
+            getFillColor: (d) => {
+              const a = Math.round(32 + d.v * 205);
+              return [56, 189, 248, a] as Color4;
+            },
+            getLineColor: [125, 211, 252, 70] as Color4,
+            lineWidthMinPixels: 0,
+            pickable: false,
+          }),
+        ]
+      : []),
 
     // ── Infrastructure: Charging Station glow (pulsing)
     new ScatterplotLayer<InfraItem>({
@@ -218,7 +261,7 @@ export default function SimulationMap3D({
       id: "cs-labels",
       data: chargingStations,
       getPosition: (d) => toCoord(d.x, d.y),
-      getText: (d) => `⚡ CHARGING ${d.id.split("-").pop()}`,
+      getText: (d) => `PWR ${d.id.split("-").pop()}`,
       getSize: 14,
       getColor: [16, 185, 129, 255],
       getTextAnchor: "middle",
@@ -418,7 +461,17 @@ export default function SimulationMap3D({
       billboard: true,
       sizeUnits: "pixels",
     }),
-  ], [drones, survivors, pulse, gridSize, chargingStations, supplyDepots, toCoord]);
+  ], [
+    drones,
+    survivors,
+    pulse,
+    gridSize,
+    chargingStations,
+    supplyDepots,
+    toCoord,
+    mesaHeatCells,
+    gridLines,
+  ]);
 
   if (!mounted) return null;
 
@@ -468,7 +521,7 @@ export default function SimulationMap3D({
           ● {drones.filter((d) => d.status !== "offline").length}/{drones.length} DRONES ACTIVE
         </div>
         <div className="rounded border border-amber-400/20 bg-slate-900/75 px-2.5 py-1 font-mono text-[9px] tracking-widest text-amber-300 backdrop-blur-sm uppercase">
-          ♥ {survivors.filter((s) => s.detected).length} SURVIVORS DETECTED
+          SURV {survivors.filter((s) => s.detected).length} DETECTED
         </div>
       </div>
 

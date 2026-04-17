@@ -169,7 +169,7 @@ export default function LiveMissionConsole() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" asChild>
-          <Link href="/map">
+          <Link href="/tactical">
             <ChevronLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -227,7 +227,7 @@ export default function LiveMissionConsole() {
           <CardHeader className="border-b border-slate-800 bg-slate-900/50 pb-4">
             <CardTitle className="text-slate-100 flex items-center gap-2 text-sm font-mono">
               <Terminal className="h-4 w-4" /> 
-              Swarm Coordinator Terminal :: Chain of Thought
+              SIREN Coordinator Terminal :: Chain of Thought
             </CardTitle>
           </CardHeader>
           
