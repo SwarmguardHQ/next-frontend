@@ -331,7 +331,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-auto">
+    <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-y-auto pt-16 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
       <Header />
       <div className="flex-1 p-4 sm:p-6 space-y-4 max-w-[1600px] w-full mx-auto pb-24">
 

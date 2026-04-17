@@ -353,8 +353,7 @@ export default function TacticalPage() {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-hidden">
-      
+    <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-hidden pt-16">
       {/* ---------- HEADER ---------- */}
       <Header />
 
@@ -364,7 +363,24 @@ export default function TacticalPage() {
           {/* Map Body */}
           <div className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
             <div className="relative flex-1">
-              <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2">
+                <div className="flex rounded-md border border-cyan-900/50 bg-black/60 p-1 backdrop-blur-md">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("2d")}
+                      className={"rounded px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase transition-colors " + (viewMode === "2d" ? "bg-cyan-500/20 text-cyan-300" : "text-slate-500 hover:text-cyan-400 hover:bg-cyan-950/40")}
+                    >
+                      2D Grid
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("3d")}
+                      className={"rounded px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase transition-colors " + (viewMode === "3d" ? "bg-cyan-500/20 text-cyan-300" : "text-slate-500 hover:text-cyan-400 hover:bg-cyan-950/40")}
+                    >
+                      3D Map
+                    </button>
+                </div>
+
                 {viewMode === "2d" && (
                   <div className="flex rounded-md border border-cyan-900/50 bg-black/60 p-1 backdrop-blur-md">
                     <button
@@ -394,23 +410,6 @@ export default function TacticalPage() {
                     </button>
                   </div>
                 )}
-
-                <div className="flex rounded-md border border-cyan-900/50 bg-black/60 p-1 backdrop-blur-md">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("2d")}
-                      className={"rounded px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase transition-colors " + (viewMode === "2d" ? "bg-cyan-500/20 text-cyan-300" : "text-slate-500 hover:text-cyan-400 hover:bg-cyan-950/40")}
-                    >
-                      2D Grid
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("3d")}
-                      className={"rounded px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase transition-colors " + (viewMode === "3d" ? "bg-cyan-500/20 text-cyan-300" : "text-slate-500 hover:text-cyan-400 hover:bg-cyan-950/40")}
-                    >
-                      3D Map
-                    </button>
-                </div>
               </div>
 
               {viewMode === "2d" ? (

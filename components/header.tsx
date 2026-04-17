@@ -38,7 +38,7 @@ export default function Header() {
   ];
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-black/80 px-6 backdrop-blur-md">
+    <header className="fixed top-0 left-0 right-0 z-[110] flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-black/80 px-6 backdrop-blur-md">
       <div className="flex items-center gap-4">
         <Sheet>
           <SheetTrigger asChild>
@@ -84,7 +84,7 @@ export default function Header() {
         </Sheet>
         
         <h1 className="text-xl font-bold tracking-widest text-cyan-400 uppercase drop-shadow-[0_0_10px_rgba(34,211,238,0.4)] hidden sm:block">
-          SWARMGUARD_HQ
+          SIREN
         </h1>
       </div>
 

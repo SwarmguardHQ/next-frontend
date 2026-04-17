@@ -701,7 +701,7 @@ export default function DroneFleetPage() {
     }, [droneData]);
 
     return (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex flex-col bg-black text-slate-300 font-mono overflow-hidden pt-16">
             <Header />
             <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "#060b14" }}>
             {selected ? (
