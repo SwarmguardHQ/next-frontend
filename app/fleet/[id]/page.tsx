@@ -17,30 +17,76 @@ import { getMeta, isFlying, buildDroneMesh, attachDefaultSensors, generateTeleme
 function CameraFeed({ drone, telemetry }: { drone: Drone; telemetry: ReturnType<typeof generateTelemetry> }) {
     const flying = isFlying(drone.status);
     const offline = drone.status === "offline";
+    const [viewMode, setViewMode] = useState<"optical" | "thermal">("optical");
     const videoSrc = drone.drone_id === "DRONE_BRAVO" ? "/drone-feed2.mp4" : "/drone-feed1.mp4";
+    const thermalSrc = "";
 
     return (
         <div className="relative w-full h-full bg-slate-900 overflow-hidden rounded-xl border border-slate-800">
             {/* Header HUD */}
             <div className="absolute top-0 inset-x-0 z-20 flex justify-between items-center px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
-                <span className="font-mono text-xs text-green-400 flex items-center gap-2">
-                    <Eye className="h-3.5 w-3.5" /> FLIR OPTICAL — {drone.drone_id}
+                <span className="font-mono text-xs text-green-400 flex items-center gap-2 drop-shadow-md">
+                    <Eye className="h-3.5 w-3.5" /> {viewMode === "thermal" ? "THERMAL CAMERA" : "OPTICAL CAMERA"} — {drone.drone_id}
                 </span>
                 <span className="font-mono text-xs bg-black/50 px-2 py-1 rounded text-green-400 flex items-center gap-1.5">
                     REC <span className={cn("inline-block w-2 h-2 rounded-full", flying ? "bg-red-500 animate-pulse" : "bg-slate-600")} />
                 </span>
             </div>
 
+            {/* View Mode Switcher */}
+            <div className="absolute top-12 right-4 z-30 flex items-center gap-1 bg-black/60 p-1 rounded-md backdrop-blur-smshadow-xl font-mono text-[10px] tracking-widest uppercase">
+                <button
+                    onClick={() => setViewMode("optical")}
+                    className={cn("px-2 py-1 rounded transition-colors", viewMode === "optical" ? "bg-green-500/20 text-green-400 font-bold" : "text-slate-400 hover:text-green-300")}
+                >
+                    OPT
+                </button>
+                <button
+                    onClick={() => setViewMode("thermal")}
+                    className={cn("px-2 py-1 rounded transition-colors", viewMode === "thermal" ? "bg-amber-500/20 text-amber-500 font-bold" : "text-slate-400 hover:text-amber-400")}
+                >
+                    IR
+                </button>
+            </div>
+
+						{/* Logic control for showing camera view */}
             {offline ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-600 font-mono">
                     <WifiOff className="h-10 w-10" /> NO SIGNAL — UPLINK LOST
                 </div>
             ) : flying ? (
                 <>
-                    <video key={videoSrc} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover grayscale contrast-125">
-                        <source src={videoSrc} type="video/mp4" />
-                    </video>
-                    <div className="absolute inset-0 bg-green-900/30 mix-blend-color pointer-events-none" />
+                <div className="absolute inset-0 flex divide-x divide-green-500/20">
+                    {(viewMode === "optical") && (
+                        <div className="relative flex-1 bg-black overflow-hidden relative group">
+                            <span className="absolute top-12 left-4 z-30 font-mono text-[10px] text-green-400 bg-black/60 px-2 py-1 flex items-center gap-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                OPTICAL VIS
+                            </span>
+                            <video key={`vis-${videoSrc}`} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover grayscale contrast-125">
+                                <source src={videoSrc} type="video/mp4" />
+                            </video>
+                        </div>
+                    )}
+                    {(viewMode === "thermal") && (
+                        <div className="relative flex-1 bg-black overflow-hidden relative group">
+                            <span className="absolute top-12 left-4 z-30 font-mono text-[10px] text-amber-500 bg-black/60 px-2 py-1 flex items-center gap-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                THERMAL IR
+                            </span>
+                            {thermalSrc ? (
+                                <video key={`ir-${thermalSrc}`} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover grayscale-[50%] sepia contrast-150 saturate-150 hue-rotate-15">
+                                    <source src={thermalSrc} type="video/mp4" />
+                                </video>
+                            ) : (
+                                <div className="absolute inset-0 flex items-center justify-center font-mono text-xs text-amber-500/50">
+                                    <Wind className="h-6 w-6 animate-pulse" />
+                                </div>
+                            )}
+                            {/* Fake thermal overlay gradient mapping */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-red-900/20 via-transparent to-amber-900/10 mix-blend-overlay pointer-events-none" />
+                        </div>
+                    )}
+
+                    <div className="absolute inset-0 bg-green-900/10 mix-blend-color pointer-events-none" />
                     <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] pointer-events-none z-10" />
                     {/* Crosshair */}
                     <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
@@ -56,6 +102,7 @@ function CameraFeed({ drone, telemetry }: { drone: Drone; telemetry: ReturnType<
                             </div>
                         </div>
                     </div>
+                </div>
                     {/* Bottom HUD */}
                     <div className="absolute bottom-3 left-3 z-20 font-mono text-[10px] text-green-400 bg-black/60 px-2 py-1.5 rounded backdrop-blur-sm space-y-0.5">
                         <div>LAT: {drone.position.y.toFixed(5)}</div>

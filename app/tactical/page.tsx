@@ -14,6 +14,17 @@ type LogEvent = {
   result_summary?: string;
   debrief?: string;
 };
+
+type MapInfraItem = { id: string; x: number; y: number };
+
+type SelectedMapItem =
+  | { kind: "drone"; data: Drone }
+  | { kind: "survivor"; data: Survivor }
+  | { kind: "charging" | "depot"; data: MapInfraItem }
+  | null;
+
+type SelectedMapPanelPos = { x: number; y: number } | null;
+
 import { Mic, MicOff, Settings, User, Bell, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, History, ShieldAlert, Cpu, Radar, Send, Play, Terminal, Target, AlertOctagon, CheckCircle2, Clock, AlertCircle, Package, BatteryCharging, HeartPulse, Triangle, Map as MapIcon, Wifi } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,6 +42,7 @@ import type { Drone, Survivor, WorldStreamSimVisual, WorldStreamTickPayload } fr
 import { useWorldStream } from "@/lib/useWorldStream";
 import { MesaSimPanel } from "@/components/sim/MesaSimPanel";
 import { Grid2DViewport } from "@/components/map/Grid2DViewport";
+import { useRouter } from "next/navigation";
 
 const SimulationMap3D = dynamic(() => import("@/components/map/SimulationMap3D"), { ssr: false });
 
@@ -91,6 +103,7 @@ const getStatusIcon = (status: string) => {
 };
 
 export default function TacticalPage() {
+  const router = useRouter();
   // Map State
   const [drones, setDrones] = useState<Drone[]>([]);
   const [survivors, setSurvivors] = useState<Survivor[]>([]);
@@ -98,6 +111,41 @@ export default function TacticalPage() {
   const [gridSize, setGridSize] = useState(20);
   const [viewMode, setViewMode] = useState<"2d" | "3d">("3d");
   const [infra, setInfra] = useState<any>({ chargingStations: [], supplyDepots: [] });
+  const [selectedMapItem, setSelectedMapItem] = useState<SelectedMapItem>(null);
+  const [selectedMapPanelPos, setSelectedMapPanelPos] = useState<SelectedMapPanelPos>(null);
+  const mapBodyRef = useRef<HTMLDivElement>(null);
+
+  const openSelectedMapItem = useCallback(
+    (event: React.MouseEvent<HTMLElement>, item: NonNullable<SelectedMapItem>) => {
+      const panelWidth = 224;
+      const panelHeight = item.kind === "drone" ? 260 : 200;
+      const margin = 12;
+      const mapRect = mapBodyRef.current?.getBoundingClientRect();
+
+      if (!mapRect) {
+        setSelectedMapItem(item);
+        setSelectedMapPanelPos({ x: 16, y: 16 });
+        return;
+      }
+
+      let nextX = event.clientX - mapRect.left + margin;
+      let nextY = event.clientY - mapRect.top + margin;
+
+      if (nextX + panelWidth > mapRect.width - margin) {
+        nextX = event.clientX - mapRect.left - panelWidth - margin;
+      }
+      if (nextY + panelHeight > mapRect.height - margin) {
+        nextY = mapRect.height - panelHeight - margin;
+      }
+
+      nextX = clamp(nextX, margin, Math.max(margin, mapRect.width - panelWidth - margin));
+      nextY = clamp(nextY, margin, Math.max(margin, mapRect.height - panelHeight - margin));
+
+      setSelectedMapItem(item);
+      setSelectedMapPanelPos({ x: nextX, y: nextY });
+    },
+    [],
+  );
 
   const cells = useMemo(() => {
     const list: { x: number; y: number }[] = [];
@@ -350,7 +398,7 @@ export default function TacticalPage() {
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         
           {/* Map Body */}
-          <div className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
+          <div ref={mapBodyRef} className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
             <div className="relative flex-1">
               <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2">
                 <div className="flex rounded-md border border-cyan-900/50 bg-black/60 p-1 backdrop-blur-md">
@@ -399,6 +447,10 @@ export default function TacticalPage() {
                       return (
                         <div
                           key={key}
+                          onClick={() => {
+                            setSelectedMapItem(null);
+                            setSelectedMapPanelPos(null);
+                          }}
                           title={`Cell (${cell.x}, ${cell.y})${isCS ? " · charging" : ""}${isDepot ? " · depot" : ""}${hasDrones ? " · drones" : ""}${hasSurvivors ? " · survivors" : ""}`}
                           className={
                             "group relative flex aspect-square items-center justify-center transition-colors hover:z-1 hover:ring-1 hover:ring-cyan-400/45 " +
@@ -415,31 +467,67 @@ export default function TacticalPage() {
                             />
                           )}
                           {isCS && (
-                            <div className="absolute left-0.5 top-0.5 flex flex-col items-center justify-center rounded bg-emerald-500/25 p-1 ring-1 ring-emerald-400/60 z-10">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const station = infra.chargingStations.find((cs: MapInfraItem) => cs.x === cell.x && cs.y === cell.y);
+                                if (station) openSelectedMapItem(e, { kind: "charging", data: station });
+                              }}
+                              className="absolute left-0.5 top-0.5 flex flex-col items-center justify-center rounded bg-emerald-500/25 p-1 ring-1 ring-emerald-400/60 z-10 hover:bg-emerald-500/35"
+                              title="Charging station details"
+                            >
                               <BatteryCharging className="h-4 w-4 text-emerald-400" />
-                            </div>
+                            </button>
                           )}
                           {isDepot && (
-                            <div className="absolute left-0.5 top-0.5 flex flex-col items-center justify-center rounded bg-sky-500/25 p-1 ring-1 ring-sky-400/60 z-10">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const depot = infra.supplyDepots.find((d: MapInfraItem) => d.x === cell.x && d.y === cell.y);
+                                if (depot) openSelectedMapItem(e, { kind: "depot", data: depot });
+                              }}
+                              className="absolute left-0.5 top-0.5 flex flex-col items-center justify-center rounded bg-sky-500/25 p-1 ring-1 ring-sky-400/60 z-10 hover:bg-sky-500/35"
+                              title="Supply depot details"
+                            >
                               <Package className="h-4 w-4 text-sky-400" />
-                            </div>
+                            </button>
                           )}
                           {(hasSurvivors || hasDrones) && (
                             <span className="absolute inset-0 rounded-xs ring-1 ring-sky-400/40" />
                           )}
                           <div className="flex flex-wrap items-center justify-center gap-2 p-1 z-20 relative content-center text-center">
                             {cellSurvivors.map((s) => (
-                              <div key={s.survivor_id} className="flex flex-col items-center gap-0.5 drop-shadow-[0_0_2px_rgba(0,0,0,0.8)]">
+                              <button
+                                key={s.survivor_id}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openSelectedMapItem(e, { kind: "survivor", data: s });
+                                }}
+                                className="flex flex-col items-center gap-0.5 drop-shadow-[0_0_2px_rgba(0,0,0,0.8)]"
+                                title={`Survivor ${s.survivor_id} details`}
+                              >
                                 <HeartPulse
                                   className={"h-5 w-5 " + survivorColor(s) + " " + (!s.detected && !s.rescued ? "opacity-60" : pulse ? "opacity-100" : "opacity-90")}
                                 />
                                 <span className={"text-[8px] font-bold tracking-wider leading-none uppercase drop-shadow-md " + survivorColor(s)}>
                                   {s.survivor_id.split('_').pop()}
                                 </span>
-                              </div>
+                              </button>
                             ))}
                             {cellDrones.map((d) => (
-                              <div key={d.drone_id} className="flex flex-col items-center gap-0.5 drop-shadow-[0_0_2px_rgba(0,0,0,0.8)]">
+                              <button
+                                key={d.drone_id}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openSelectedMapItem(e, { kind: "drone", data: d });
+                                }}
+                                className="flex flex-col items-center gap-0.5 drop-shadow-[0_0_2px_rgba(0,0,0,0.8)]"
+                                title={`Drone ${d.drone_id} details`}
+                              >
                                 <Triangle
                                   fill="currentColor"
                                   className={"h-5 w-5 " + droneColor(d.status) + " " + (d.status === "offline" ? "rotate-180" : "")}
@@ -447,7 +535,7 @@ export default function TacticalPage() {
                                 <span className={"text-[8px] font-bold tracking-wider leading-none uppercase drop-shadow-md " + droneColor(d.status)}>
                                   {d.drone_id.replace('DRONE_', '')}
                                 </span>
-                              </div>
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -467,6 +555,142 @@ export default function TacticalPage() {
                   supplyDepots={infra.supplyDepots}
                   simHeat={simHeat}
                 />
+              )}
+
+              {viewMode === "2d" && selectedMapItem && selectedMapPanelPos && (
+                <div
+                  className="absolute z-50 w-56 rounded-md border border-sky-400/30 bg-slate-900/96 p-3 shadow-[0_4px_32px_rgba(0,0,0,0.8)] backdrop-blur-md"
+                  style={{ left: `${selectedMapPanelPos.x}px`, top: `${selectedMapPanelPos.y}px` }}
+                >
+                  <button
+                    type="button"
+                    className="absolute right-2 top-2 text-slate-400 transition-colors hover:text-white"
+                    onClick={() => {
+                      setSelectedMapItem(null);
+                      setSelectedMapPanelPos(null);
+                    }}
+                  >
+                    ✕
+                  </button>
+
+                  {selectedMapItem.kind === "drone" && (
+                    <>
+                      <p className="mb-2.5 font-mono text-[11px] font-bold tracking-widest text-sky-300 uppercase">
+                        {selectedMapItem.data.drone_id.replace("_", " ").toUpperCase()}
+                      </p>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Status</span>
+                          <span className="text-white">{selectedMapItem.data.status.toUpperCase()}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Battery</span>
+                          <span className={selectedMapItem.data.battery <= 20 ? "text-red-400" : selectedMapItem.data.battery <= 50 ? "text-amber-400" : "text-emerald-400"}>
+                            {selectedMapItem.data.battery.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Sector</span>
+                          <span className="text-white">{selectedMapItem.data.assigned_sector ?? "—"}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Grid</span>
+                          <span className="font-mono text-slate-300">({selectedMapItem.data.position.x}, {selectedMapItem.data.position.y})</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Payload</span>
+                          <span className="text-slate-300">{selectedMapItem.data.payload ?? "None"}</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 border-t border-cyan-800/40 pt-3 font-mono">
+                        <button
+                          onClick={() => router.push(`/fleet/${selectedMapItem.data.drone_id}`)}
+                          className="flex w-full items-center justify-center rounded-sm border border-cyan-800 bg-cyan-950/60 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-cyan-300 transition-colors hover:bg-cyan-900"
+                        >
+                          Inspect Drone Details
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {selectedMapItem.kind === "survivor" && (
+                    <>
+                      <p className="mb-2.5 font-mono text-[11px] font-bold tracking-widest text-amber-300 uppercase">
+                        {selectedMapItem.data.survivor_id.replace("_", " ").toUpperCase()}
+                      </p>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Condition</span>
+                          <span className={selectedMapItem.data.condition === "critical" ? "text-red-400" : selectedMapItem.data.condition === "moderate" ? "text-amber-400" : "text-emerald-400"}>
+                            {selectedMapItem.data.condition.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Detected</span>
+                          <span className={selectedMapItem.data.detected ? "text-emerald-400" : "text-slate-400"}>{selectedMapItem.data.detected ? "YES" : "NO"}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Rescued</span>
+                          <span className={selectedMapItem.data.rescued ? "text-sky-400" : "text-slate-500"}>{selectedMapItem.data.rescued ? "YES" : "PENDING"}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Grid</span>
+                          <span className="font-mono text-slate-300">({selectedMapItem.data.position.x}, {selectedMapItem.data.position.y})</span>
+                        </div>
+                        {selectedMapItem.data.supplies_received.length > 0 && (
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-slate-400">Supplies</span>
+                            <span className="text-sky-300">{selectedMapItem.data.supplies_received.join(", ")}</span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {selectedMapItem.kind === "charging" && (
+                    <>
+                      <p className="mb-2.5 font-mono text-[11px] font-bold tracking-widest text-emerald-300 uppercase">
+                        CHARGING STATION
+                      </p>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">ID</span>
+                          <span className="text-white">{selectedMapItem.data.id.toUpperCase()}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Type</span>
+                          <span className="text-emerald-300">POWER HUB</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Grid</span>
+                          <span className="font-mono text-slate-300">({selectedMapItem.data.x}, {selectedMapItem.data.y})</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {selectedMapItem.kind === "depot" && (
+                    <>
+                      <p className="mb-2.5 font-mono text-[11px] font-bold tracking-widest text-sky-300 uppercase">
+                        SUPPLY DEPOT
+                      </p>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">ID</span>
+                          <span className="text-white">{selectedMapItem.data.id.toUpperCase()}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Type</span>
+                          <span className="text-sky-300">LOGISTICS NODE</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-400">Grid</span>
+                          <span className="font-mono text-slate-300">({selectedMapItem.data.x}, {selectedMapItem.data.y})</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
 
               {/* ----- MAP LEGEND ----- */}
