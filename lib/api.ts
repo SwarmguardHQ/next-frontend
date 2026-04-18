@@ -28,16 +28,16 @@ export class ApiClient {
 
     try {
       const response = await fetch(url, config);
-      const data = await response.json();
+      const isJson = response.headers.get("content-type")?.includes("application/json");
+      const data = isJson ? await response.json() : null;
 
       if (!response.ok) {
-        throw new Error(data.message || response.statusText || "API Error");
+        throw new Error(data?.message || data?.detail || response.statusText || `HTTP error! status: ${response.status}`);
       }
 
       return data;
 
     } catch (error) {
-      console.error(`Error fetching ${url}:`, error);
       throw error;
     }
   }

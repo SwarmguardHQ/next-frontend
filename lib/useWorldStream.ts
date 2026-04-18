@@ -45,7 +45,7 @@ export function useWorldStream(options: UseWorldStreamOptions = {}) {
 
   const fetchRest = useCallback(async () => {
     try {
-      const metricsPromise = api.world.getMetrics().catch(() => null);
+      const metricsPromise = Promise.resolve(null);
       const meshPromise = onPollMeshLogRef.current
         ? api.world.getMeshLog().catch(() => null)
         : Promise.resolve(null);
