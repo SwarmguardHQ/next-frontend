@@ -73,7 +73,7 @@ function droneGlowColor(status: string): Color4 {
 
 function survivorFillColor(s: Survivor, pulse: number): Color4 {
   if (s.rescued) return [125, 211, 252, 230]; // Sky 300
-  if (!s.detected) return [148, 163, 184, 255]; // Slate 400 (Muted)
+  if (!s.detected) return [151, 163, 184, 255]; // Slate 400
   
   if (s.condition === "critical") return pulse ? [255, 60, 60, 255] : [239, 68, 68, 220]; // Red 500
   if (s.condition === "moderate") return [245, 158, 11, 240]; // Amber 500
@@ -147,6 +147,7 @@ export default function SimulationMap3D({
   const [mounted, setMounted] = useState(false);
   const [selected, setSelected] = useState<SelectedObject>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const [zoom, setZoom] = useState(INITIAL_VIEW.zoom);
 
   // Helper for dynamic coordinate conversion
   const toCoord = useCallback((x: number, y: number): [number, number] => {
@@ -204,6 +205,7 @@ export default function SimulationMap3D({
       id: "tactical-grid",
       data: gridLines,
       getPath: (d) => d.path,
+      visible: zoom > 13.5,
       getColor: [61, 158, 228, 255], // Subtle cyan with low alpha
       getWidth: 1,
       widthMinPixels: 0.5,
@@ -266,6 +268,7 @@ export default function SimulationMap3D({
       getColor: [16, 185, 129, 255],
       getTextAnchor: "middle",
       getAlignmentBaseline: "center",
+      visible: zoom > 15.5,
       getPixelOffset: [0, -45],
       fontFamily: "Barlow Condensed, sans-serif",
       fontWeight: 800,
@@ -307,6 +310,7 @@ export default function SimulationMap3D({
       getColor: [56, 189, 248, 255],
       getTextAnchor: "middle",
       getAlignmentBaseline: "center",
+      visible: zoom > 15.5,
       getPixelOffset: [0, -45],
       fontFamily: "Barlow Condensed, sans-serif",
       fontWeight: 800,
@@ -357,11 +361,12 @@ export default function SimulationMap3D({
       id: "survivor-labels",
       data: survivors,
       getPosition: (s) => toCoord(s.position.x, s.position.y),
-      getText: (s) => s.detected ? s.condition.slice(0, 4).toUpperCase() : "?",
+      getText: (s) => s.survivor_id.split("_").pop()?.toUpperCase() ?? "",
       getSize: 11,
       getColor: (s) => s.detected ? survivorLabelColor(s) : [148, 163, 184, 180] as Color4,
       getTextAnchor: "middle",
       getAlignmentBaseline: "center",
+      visible: zoom > 16.0,
       getPixelOffset: [0, 22],
       fontFamily: "Barlow Condensed, sans-serif",
       fontWeight: 700,
@@ -379,6 +384,7 @@ export default function SimulationMap3D({
       getRadius: 200,
       radiusMinPixels: 32,
       radiusMaxPixels: 130,
+      visible: zoom > 14.8,
       getFillColor: [61, 158, 228, 14],
       getLineColor: [61, 158, 228, 55],
       lineWidthMinPixels: 1,
@@ -433,31 +439,10 @@ export default function SimulationMap3D({
       getColor: [255, 255, 255, 220],
       getTextAnchor: "middle",
       getAlignmentBaseline: "center",
+      visible: zoom > 15.8,
       getPixelOffset: [0, -18],
       fontFamily: "Barlow Condensed, sans-serif",
       fontWeight: 700,
-      billboard: true,
-      sizeUnits: "pixels",
-    }),
-
-    // Battery % sub-label
-    new TextLayer<Drone>({
-      id: "drone-battery-labels",
-      data: drones,
-      getPosition: (d) => [...toCoord(d.position.x, d.position.y), 23],
-      getText: (d) => `${Math.round(d.battery)}%`,
-      getSize: 10,
-      getColor: (d) =>
-        d.battery <= 20
-          ? [239, 68, 68, 200]
-          : d.battery <= 50
-            ? [245, 158, 11, 200]
-            : [34, 197, 94, 180],
-      getTextAnchor: "middle",
-      getAlignmentBaseline: "center",
-      getPixelOffset: [0, 16],
-      fontFamily: "JetBrains Mono, monospace",
-      fontWeight: 600,
       billboard: true,
       sizeUnits: "pixels",
     }),
@@ -471,6 +456,7 @@ export default function SimulationMap3D({
     toCoord,
     mesaHeatCells,
     gridLines,
+    zoom,
   ]);
 
   if (!mounted) return null;
@@ -495,6 +481,7 @@ export default function SimulationMap3D({
         initialViewState={INITIAL_VIEW}
         controller
         layers={layers}
+        onViewStateChange={({ viewState }: any) => setZoom(viewState.zoom)}
         onClick={(info: PickingInfo) => {
           if (!info.picked) {
             setSelected(null);

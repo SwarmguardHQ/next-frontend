@@ -14,7 +14,7 @@ type LogEvent = {
   result_summary?: string;
   debrief?: string;
 };
-import { Mic, MicOff, Settings, User, Bell, ChevronLeft, ChevronRight, History, ShieldAlert, Cpu, Radar, Send, Play, Terminal, Target, AlertOctagon, CheckCircle2, Clock, AlertCircle, Package, BatteryCharging, HeartPulse, Triangle, Map as MapIcon, Wifi } from "lucide-react";
+import { Mic, MicOff, Settings, User, Bell, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, History, ShieldAlert, Cpu, Radar, Send, Play, Terminal, Target, AlertOctagon, CheckCircle2, Clock, AlertCircle, Package, BatteryCharging, HeartPulse, Triangle, Map as MapIcon, Wifi } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -136,6 +136,7 @@ export default function TacticalPage() {
 
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  const [legendOpen, setLegendOpen] = useState(true);
 
   const [missionsData, setMissionsData] = useState<MissionsListResponse | null>(null);
   const [scenariosData, setScenariosData] = useState<ScenariosListResponse | null>(null);
@@ -344,151 +345,184 @@ export default function TacticalPage() {
   const sortedMissions = missionsData?.missions?.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()) ?? [];
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] w-full flex-col overflow-hidden bg-background font-mono text-muted-foreground">
+    <div className="fixed top-16 left-0 right-0 bottom-0 flex flex-col overflow-hidden bg-background font-mono text-muted-foreground">
       {/* ---------- MAIN WORKSPACE ---------- */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-
-        {/* Map Body */}
-        <div className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
-          <div className="relative flex-1">
-            <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
-              <div className="flex rounded-md border border-cyan-900/50 bg-black/60 p-1 backdrop-blur-md">
-                <button
-                  type="button"
-                  onClick={() => setViewMode("2d")}
-                  className={"rounded px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase transition-colors " + (viewMode === "2d" ? "bg-cyan-500/20 text-cyan-300" : "text-slate-500 hover:text-cyan-400 hover:bg-cyan-950/40")}
-                >
-                  2D Grid
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("3d")}
-                  className={"rounded px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase transition-colors " + (viewMode === "3d" ? "bg-cyan-500/20 text-cyan-300" : "text-slate-500 hover:text-cyan-400 hover:bg-cyan-950/40")}
-                >
-                  3D Map
-                </button>
-              </div>
-            </div>
-
-            {viewMode === "2d" ? (
-              <div className="absolute inset-0 z-0 flex min-h-0 flex-col bg-slate-950/90 p-2 sm:p-3">
-                <Grid2DViewport className="min-h-0 flex-1" toolbarClassName="shrink-0">
-                  <div className="mx-auto aspect-square w-full max-w-[min(92vw,820px)] min-w-[280px]">
-                    <div
-                      className="grid h-full w-full gap-px rounded-md bg-slate-800/80 p-px shadow-[0_0_0_1px_rgba(34,211,238,0.12)]"
-                      style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
+        
+          {/* Map Body */}
+          <div className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
+            <div className="relative flex-1">
+              <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2">
+                <div className="flex rounded-md border border-cyan-900/50 bg-black/60 p-1 backdrop-blur-md">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("2d")}
+                      className={"rounded px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase transition-colors " + (viewMode === "2d" ? "bg-cyan-500/20 text-cyan-300" : "text-slate-500 hover:text-cyan-400 hover:bg-cyan-950/40")}
                     >
-                      {cells.map((cell) => {
-                        const key = `${cell.x}-${cell.y}`;
-                        const cellDrones = dronesByCell.get(key) ?? [];
-                        const cellSurvivors = survivorsByCell.get(key) ?? [];
-                        const isCS = infra.chargingStations.some((cs: any) => cs.x === cell.x && cs.y === cell.y);
-                        const isDepot = infra.supplyDepots.some((d: any) => d.x === cell.x && d.y === cell.y);
-                        const hasDrones = cellDrones.length > 0;
-                        const hasSurvivors = cellSurvivors.length > 0;
+                      2D Grid
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("3d")}
+                      className={"rounded px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase transition-colors " + (viewMode === "3d" ? "bg-cyan-500/20 text-cyan-300" : "text-slate-500 hover:text-cyan-400 hover:bg-cyan-950/40")}
+                    >
+                      3D Map
+                    </button>
+                </div>
+              </div>
 
-                        const heatVal =
-                          simHeat != null &&
-                            Array.isArray(simHeat[cell.y]) &&
-                            simHeat[cell.y][cell.x] != null &&
-                            Number.isFinite(simHeat[cell.y][cell.x])
-                            ? Number(simHeat[cell.y][cell.x])
-                            : null;
+              {viewMode === "2d" ? (
+                <div className="absolute inset-0 z-0 flex min-h-0 flex-col bg-slate-950/90 p-2 sm:p-3">
+                  <Grid2DViewport className="min-h-0 flex-1" toolbarClassName="shrink-0">
+                    <div className="mx-auto aspect-square w-full max-w-[min(98vw,1600px)] min-w-[800px]">
+                      <div
+                        className="grid h-full w-full gap-px rounded-md bg-slate-800/80 p-px shadow-[0_0_0_1px_rgba(34,211,238,0.12)]"
+                        style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
+                      >
+                    {cells.map((cell) => {
+                      const key = `${cell.x}-${cell.y}`;
+                      const cellDrones = dronesByCell.get(key) ?? [];
+                      const cellSurvivors = survivorsByCell.get(key) ?? [];
+                      const isCS = infra.chargingStations.some((cs: any) => cs.x === cell.x && cs.y === cell.y);
+                      const isDepot = infra.supplyDepots.some((d: any) => d.x === cell.x && d.y === cell.y);
+                      const hasDrones = cellDrones.length > 0;
+                      const hasSurvivors = cellSurvivors.length > 0;
 
-                        return (
-                          <div
-                            key={key}
-                            title={`Cell (${cell.x}, ${cell.y})${isCS ? " · charging" : ""}${isDepot ? " · depot" : ""}${hasDrones ? " · drones" : ""}${hasSurvivors ? " · survivors" : ""}`}
-                            className={
-                              "group relative flex aspect-square items-center justify-center transition-colors hover:z-[1] hover:ring-1 hover:ring-cyan-400/45 " +
-                              (isCS ? "bg-emerald-950/60" : isDepot ? "bg-sky-950/60" : "bg-slate-900")
-                            }
-                          >
-                            {heatVal != null && (
-                              <div
-                                className="pointer-events-none absolute inset-0 rounded-[2px]"
-                                style={{
-                                  backgroundColor: `rgba(56, 189, 248, ${0.1 + heatVal * 0.45})`,
-                                }}
-                                aria-hidden
-                              />
-                            )}
-                            {isCS && (
-                              <div className="absolute left-0.5 top-0.5 flex items-center justify-center rounded bg-emerald-500/25 p-0.5 ring-1 ring-emerald-400/60">
-                                <BatteryCharging className="h-3 w-3 text-emerald-400" />
-                              </div>
-                            )}
-                            {isDepot && (
-                              <div className="absolute bottom-0.5 right-0.5 flex items-center justify-center rounded bg-sky-500/25 p-0.5 ring-1 ring-sky-400/60">
-                                <Package className="h-3 w-3 text-sky-400" />
-                              </div>
-                            )}
-                            {(hasSurvivors || hasDrones) && (
-                              <span className="absolute inset-0 rounded-[2px] ring-1 ring-sky-400/40" />
-                            )}
-                            <div className="flex flex-wrap items-center justify-center gap-1 p-1">
-                              {cellSurvivors.map((s) => (
-                                <HeartPulse
-                                  key={s.survivor_id}
-                                  className={"h-4 w-4 drop-shadow-sm " + survivorColor(s) + " " + (!s.detected && !s.rescued ? "opacity-60" : pulse ? "opacity-100" : "opacity-90")}
-                                />
-                              ))}
-                              {cellDrones.map((d) => (
-                                <div key={d.drone_id} className="relative drop-shadow-sm">
-                                  <Triangle
-                                    fill="currentColor"
-                                    className={"h-4 w-4 " + droneColor(d.status) + " " + (d.status === "offline" ? "rotate-180" : "")}
-                                  />
-                                </div>
-                              ))}
+                      const heatVal =
+                        simHeat != null &&
+                        Array.isArray(simHeat[cell.y]) &&
+                        simHeat[cell.y][cell.x] != null &&
+                        Number.isFinite(simHeat[cell.y][cell.x])
+                          ? Number(simHeat[cell.y][cell.x])
+                          : null;
+
+                      return (
+                        <div
+                          key={key}
+                          title={`Cell (${cell.x}, ${cell.y})${isCS ? " · charging" : ""}${isDepot ? " · depot" : ""}${hasDrones ? " · drones" : ""}${hasSurvivors ? " · survivors" : ""}`}
+                          className={
+                            "group relative flex aspect-square items-center justify-center transition-colors hover:z-1 hover:ring-1 hover:ring-cyan-400/45 " +
+                            (isCS ? "bg-emerald-950/60" : isDepot ? "bg-sky-950/60" : "bg-slate-900")
+                          }
+                        >
+                          {heatVal != null && (
+                            <div
+                              className="pointer-events-none absolute inset-0 rounded-xs"
+                              style={{
+                                backgroundColor: `rgba(56, 189, 248, ${0.1 + heatVal * 0.45})`,
+                              }}
+                              aria-hidden
+                            />
+                          )}
+                          {isCS && (
+                            <div className="absolute left-0.5 top-0.5 flex flex-col items-center justify-center rounded bg-emerald-500/25 p-1 ring-1 ring-emerald-400/60 z-10">
+                              <BatteryCharging className="h-4 w-4 text-emerald-400" />
                             </div>
+                          )}
+                          {isDepot && (
+                            <div className="absolute left-0.5 top-0.5 flex flex-col items-center justify-center rounded bg-sky-500/25 p-1 ring-1 ring-sky-400/60 z-10">
+                              <Package className="h-4 w-4 text-sky-400" />
+                            </div>
+                          )}
+                          {(hasSurvivors || hasDrones) && (
+                            <span className="absolute inset-0 rounded-xs ring-1 ring-sky-400/40" />
+                          )}
+                          <div className="flex flex-wrap items-center justify-center gap-2 p-1 z-20 relative content-center text-center">
+                            {cellSurvivors.map((s) => (
+                              <div key={s.survivor_id} className="flex flex-col items-center gap-0.5 drop-shadow-[0_0_2px_rgba(0,0,0,0.8)]">
+                                <HeartPulse
+                                  className={"h-5 w-5 " + survivorColor(s) + " " + (!s.detected && !s.rescued ? "opacity-60" : pulse ? "opacity-100" : "opacity-90")}
+                                />
+                                <span className={"text-[8px] font-bold tracking-wider leading-none uppercase drop-shadow-md " + survivorColor(s)}>
+                                  {s.survivor_id.split('_').pop()}
+                                </span>
+                              </div>
+                            ))}
+                            {cellDrones.map((d) => (
+                              <div key={d.drone_id} className="flex flex-col items-center gap-0.5 drop-shadow-[0_0_2px_rgba(0,0,0,0.8)]">
+                                <Triangle
+                                  fill="currentColor"
+                                  className={"h-5 w-5 " + droneColor(d.status) + " " + (d.status === "offline" ? "rotate-180" : "")}
+                                />
+                                <span className={"text-[8px] font-bold tracking-wider leading-none uppercase drop-shadow-md " + droneColor(d.status)}>
+                                  {d.drone_id.replace('DRONE_', '')}
+                                </span>
+                              </div>
+                            ))}
                           </div>
-                        );
-                      })}
+                        </div>
+                      );
+                    })}
+                      </div>
                     </div>
+                  </Grid2DViewport>
+                </div>
+              ) : (
+                <SimulationMap3D
+                  drones={drones}
+                  survivors={survivors}
+                  pulse={pulse}
+                  gridSize={gridSize}
+                  chargingStations={infra.chargingStations}
+                  supplyDepots={infra.supplyDepots}
+                  simHeat={simHeat}
+                />
+              )}
+
+              {/* ----- MAP LEGEND ----- */}
+              <div className={cn(
+                "absolute bottom-6 left-6 z-50 hidden flex-col rounded-sm border border-cyan-900/50 bg-black/60 font-mono text-[10px] uppercase text-slate-400 shadow-[0_0_15px_rgba(8,145,178,0.15)] backdrop-blur-md transition-all duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] select-none hover:bg-black/80 lg:flex overflow-hidden",
+                legendOpen ? "max-w-[500px]" : "max-w-[44px]"
+              )}>
+                <button
+                  type="button"
+                  onClick={() => setLegendOpen(!legendOpen)}
+                  className={cn(
+                    "flex w-full items-center font-bold text-cyan-500 hover:text-cyan-300 focus:outline-none whitespace-nowrap transition-all duration-500",
+                    legendOpen ? "justify-between gap-4 p-3 px-4 min-w-[120px]" : "justify-center p-3 min-w-[44px]"
+                  )}
+                >
+                  <span className={cn(
+                    "tracking-widest transition-all duration-500",
+                    legendOpen ? "opacity-100 translate-x-0 w-auto" : "opacity-0 -translate-x-8 w-0"
+                  )}>MAP LEGEND</span>
+                  <div className="relative flex items-center justify-center h-4 w-4 shrink-0 transition-transform duration-500">
+                    <ChevronDown className={cn("absolute h-4 w-4 transition-all duration-500", legendOpen ? "opacity-100 scale-100 rotate-0" : "opacity-0 scale-50 rotate-90")} />
+                    <MapIcon className={cn("absolute h-4 w-4 transition-all duration-500", legendOpen ? "opacity-0 scale-50 -rotate-90" : "opacity-100 scale-100 rotate-0")} />
                   </div>
-                </Grid2DViewport>
+                </button>
+                <div
+                  className={cn(
+                    "flex gap-8 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] min-w-[400px]",
+                    legendOpen ? "max-h-96 px-6 pb-5 opacity-100 translate-y-0" : "max-h-0 px-6 pb-0 opacity-0 -translate-y-4"
+                  )}
+                >
+                  <div className="flex flex-col gap-2.5">
+                    <span className="text-cyan-500/70 font-bold mb-1 tracking-widest text-[9px]">Drones</span>
+                    <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-cyan-400" /> Active</div>
+                    <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-emerald-400" /> Charging</div>
+                    <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-amber-400" /> Returning</div>
+                    <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-red-500 rotate-180" /> Offline</div>
+                  </div>
+                  <div className="flex flex-col gap-2.5 border-l border-cyan-900/30 pl-8">
+                    <span className="text-cyan-500/70 font-bold mb-1 tracking-widest text-[9px]">Survivors</span>
+                    <div className="flex items-center gap-2"><HeartPulse className="h-3 w-3 text-sky-300" /> Rescued</div>
+                    <div className="flex items-center gap-2"><HeartPulse className="h-3 w-3 text-emerald-500" /> Stable</div>
+                    <div className="flex items-center gap-2"><HeartPulse className="h-3 w-3 text-amber-500" /> Moderate</div>
+                    <div className="flex items-center gap-2"><HeartPulse className="h-3 w-3 text-red-500" /> Critical</div>
+                    <div className="flex items-center gap-2"><HeartPulse className="h-3 w-3 text-slate-500 opacity-60" /> Undetected</div>
+                  </div>
+                  <div className="flex flex-col gap-2.5 border-l border-cyan-900/30 pl-8">
+                    <span className="text-cyan-500/70 font-bold mb-1 tracking-widest text-[9px]">Grid Tech</span>
+                    <div className="flex items-center gap-2"><BatteryCharging className="h-3 w-3 text-emerald-500" /> Charging Station</div>
+                    <div className="flex items-center gap-2"><Package className="h-3 w-3 text-sky-500" /> Supply Depot</div>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <SimulationMap3D
-                drones={drones}
-                survivors={survivors}
-                pulse={pulse}
-                gridSize={gridSize}
-                chargingStations={infra.chargingStations}
-                supplyDepots={infra.supplyDepots}
-                simHeat={simHeat}
-              />
-            )}
 
-            {/* ----- MAP LEGEND ----- */}
-            <div className="absolute bottom-6 left-6 z-50 hidden gap-8 rounded-sm border border-cyan-900/50 bg-black/60 p-4 px-6 font-mono text-[10px] uppercase text-slate-400 shadow-[0_0_15px_rgba(8,145,178,0.15)] backdrop-blur-md transition-opacity duration-300 select-none hover:bg-black/80 lg:flex">
-              <div className="flex flex-col gap-2.5">
-                <span className="text-cyan-500 font-bold mb-1 tracking-widest">Drones</span>
-                <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-cyan-400" /> Active</div>
-                <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-emerald-400" /> Charging</div>
-                <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-amber-400" /> Returning</div>
-                <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-red-500 rotate-180" /> Offline</div>
-              </div>
-              <div className="flex flex-col gap-2.5 border-l border-cyan-900/30 pl-8">
-                <span className="text-cyan-500 font-bold mb-1 tracking-widest">Survivors</span>
-                <div className="flex items-center gap-2"><HeartPulse className="h-3 w-3 text-sky-300" /> Rescued</div>
-                <div className="flex items-center gap-2"><HeartPulse className="h-3 w-3 text-emerald-500" /> Stable</div>
-                <div className="flex items-center gap-2"><HeartPulse className="h-3 w-3 text-amber-500" /> Moderate</div>
-                <div className="flex items-center gap-2"><HeartPulse className="h-3 w-3 text-red-500" /> Critical</div>
-                <div className="flex items-center gap-2"><HeartPulse className="h-3 w-3 text-slate-500 opacity-60" /> Undetected</div>
-              </div>
-              <div className="flex flex-col gap-2.5 border-l border-cyan-900/30 pl-8">
-                <span className="text-cyan-500 font-bold mb-1 tracking-widest">Grid Tech</span>
-                <div className="flex items-center gap-2"><BatteryCharging className="h-3 w-3 text-emerald-500" /> Charging Station</div>
-                <div className="flex items-center gap-2"><Package className="h-3 w-3 text-sky-500" /> Supply Depot</div>
-              </div>
             </div>
-
           </div>
-        </div>
-        {/* ---------- LEFT PANEL: MISSION COMMAND ---------- */}
-        <div className={cn(
+        {/* ---------- LEFT PANEL: MISSION COMMAND ---------- */}        <div className={cn(
           "relative z-10 flex w-80 flex-col border-r border-white/10 bg-black/95 shadow-2xl transition-all duration-300",
           leftOpen ? "translate-x-0" : "-translate-x-full"
         )}>
@@ -520,7 +554,7 @@ export default function TacticalPage() {
                 streamLive={worldStreamLive}
                 mesaBusy={mesaBusy}
                 onMesaStep={handleMesaStep}
-                className="!border-t-0 !pt-0"
+                className="border-t-0! pt-0!"
               />
             </div>
 
@@ -531,7 +565,7 @@ export default function TacticalPage() {
                 <SelectTrigger className="w-full h-10 text-xs capitalize bg-black/50 border border-cyan-900/50 text-cyan-100 placeholder:text-slate-600 focus:ring-cyan-500 rounded-sm">
                   <SelectValue placeholder="Select an operation..." />
                 </SelectTrigger>
-                <SelectContent className="z-[200] bg-slate-950 border-cyan-900 text-cyan-100">
+                <SelectContent className="z-200 bg-slate-950 border-cyan-900 text-cyan-100">
                   {scenariosData?.scenarios.map((s) => (
                     <SelectItem key={s.name} value={s.name} className="capitalize text-xs hover:bg-cyan-900/50 focus:bg-cyan-900/50">
                       {s.name.replace(/_/g, " ")}
@@ -615,7 +649,7 @@ export default function TacticalPage() {
 
         {/* ---------- RIGHT PANEL: MISSION CONSOLE TERMINAL ---------- */}
         <div className={cn(
-          "relative z-10 flex w-[450px] flex-col border-l border-white/10 bg-black/95 shadow-2xl transition-all duration-300",
+          "relative z-10 flex w-112.5 flex-col border-l border-white/10 bg-black/95 shadow-2xl transition-all duration-300",
           rightOpen ? "translate-x-0" : "translate-x-full"
         )}>
           {/* Toggle Button */}
@@ -753,6 +787,7 @@ export default function TacticalPage() {
     </div>
   );
 }
+
 
 
 
