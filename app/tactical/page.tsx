@@ -373,7 +373,7 @@ export default function TacticalPage() {
               {viewMode === "2d" ? (
                 <div className="absolute inset-0 z-0 flex min-h-0 flex-col bg-slate-950/90 p-2 sm:p-3">
                   <Grid2DViewport className="min-h-0 flex-1" toolbarClassName="shrink-0">
-                    <div className="mx-auto aspect-square w-full max-w-[min(92vw,820px)] min-w-[280px]">
+                    <div className="mx-auto aspect-square w-[min(98vmin,1600px)] min-w-[min(360px,94vw)] max-w-[min(98vmin,1600px)] shrink-0">
                       <div
                         className="grid h-full w-full gap-px rounded-md bg-slate-800/80 p-px shadow-[0_0_0_1px_rgba(34,211,238,0.12)]"
                         style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
