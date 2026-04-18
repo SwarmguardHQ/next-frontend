@@ -11,6 +11,8 @@ import "mapbox-gl/dist/mapbox-gl.css";
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 const MAP_STYLE = "mapbox://styles/mapbox/satellite-streets-v12";
 
+import { useRouter } from "next/navigation";
+
 // Kuala Lumpur suburban disaster zone — mixed terrain + buildings on satellite
 const MISSION_CENTER: [number, number] = [100.303163, 5.356944]; // [lng, lat]
 const CELL_DEG = 0.00042; // ~47 m per grid cell
@@ -31,6 +33,8 @@ type MesaHeatCell = { x: number; y: number; v: number };
 type SelectedObject =
   | { kind: "drone"; data: Drone }
   | { kind: "survivor"; data: Survivor }
+  | { kind: "charging"; data: InfraItem }
+  | { kind: "depot"; data: InfraItem }
   | null;
 
 // Lucide HeartPulse SVG -> Data URI (White version for masking)
@@ -258,6 +262,13 @@ export default function SimulationMap3D({
       getFillColor: [34, 197, 94, 200],
       getLineColor: [167, 243, 208, 255],
       lineWidthMinPixels: 1,
+      pickable: true,
+      onClick: (info: PickingInfo) => {
+        if (info.object) {
+          setSelected({ kind: "charging", data: info.object as InfraItem });
+          setTooltipPos({ x: info.x, y: info.y });
+        }
+      },
     }),
     new TextLayer<InfraItem>({
       id: "cs-labels",
@@ -300,6 +311,13 @@ export default function SimulationMap3D({
       getFillColor: [14, 165, 233, 200],
       getLineColor: [186, 230, 253, 255],
       lineWidthMinPixels: 1,
+      pickable: true,
+      onClick: (info: PickingInfo) => {
+        if (info.object) {
+          setSelected({ kind: "depot", data: info.object as InfraItem });
+          setTooltipPos({ x: info.x, y: info.y });
+        }
+      },
     }),
     new TextLayer<InfraItem>({
       id: "depot-labels",
@@ -556,14 +574,19 @@ function InspectPopup({ selected, x, y, onClose }: PopupProps) {
 
       {selected.kind === "drone" ? (
         <DronePopup drone={selected.data} />
-      ) : (
+      ) : selected.kind === "survivor" ? (
         <SurvivorPopup survivor={selected.data} />
+      ) : selected.kind === "charging" ? (
+        <ChargingStationPopup station={selected.data} />
+      ) : (
+        <SupplyDepotPopup depot={selected.data} />
       )}
     </div>
   );
 }
 
 function DronePopup({ drone }: { drone: Drone }) {
+  const router = useRouter();
   const batColor =
     drone.battery <= 20
       ? "text-red-400"
@@ -586,6 +609,14 @@ function DronePopup({ drone }: { drone: Drone }) {
           valueClass="font-mono text-slate-300"
         />
         <Row label="Payload" value={drone.payload ?? "None"} valueClass="text-slate-300" />
+      </div>
+      <div className="mt-3 pt-3 border-t border-cyan-800/40 font-mono">
+        <button
+          onClick={() => router.push(`/fleet/${drone.drone_id}`)}
+          className="w-full flex items-center justify-center py-1.5 px-3 bg-cyan-950/60 hover:bg-cyan-900 border border-cyan-800 text-[10px] text-cyan-300 font-bold uppercase tracking-widest rounded-sm transition-colors"
+        >
+          Inspect Drone Details
+        </button>
       </div>
     </>
   );
@@ -628,6 +659,36 @@ function SurvivorPopup({ survivor }: { survivor: Survivor }) {
             valueClass="text-sky-300"
           />
         )}
+      </div>
+    </>
+  );
+}
+
+function ChargingStationPopup({ station }: { station: InfraItem }) {
+  return (
+    <>
+      <p className="mb-2.5 font-mono text-[11px] font-bold tracking-widest text-emerald-300 uppercase">
+        CHARGING STATION
+      </p>
+      <div className="space-y-1.5 text-xs">
+        <Row label="ID" value={station.id.toUpperCase()} valueClass="text-white" />
+        <Row label="Type" value="POWER HUB" valueClass="text-emerald-300" />
+        <Row label="Grid" value={`(${station.x}, ${station.y})`} valueClass="font-mono text-slate-300" />
+      </div>
+    </>
+  );
+}
+
+function SupplyDepotPopup({ depot }: { depot: InfraItem }) {
+  return (
+    <>
+      <p className="mb-2.5 font-mono text-[11px] font-bold tracking-widest text-sky-300 uppercase">
+        SUPPLY DEPOT
+      </p>
+      <div className="space-y-1.5 text-xs">
+        <Row label="ID" value={depot.id.toUpperCase()} valueClass="text-white" />
+        <Row label="Type" value="LOGISTICS NODE" valueClass="text-sky-300" />
+        <Row label="Grid" value={`(${depot.x}, ${depot.y})`} valueClass="font-mono text-slate-300" />
       </div>
     </>
   );
