@@ -54,6 +54,8 @@ export interface WorldMapResponse {
   map: string;
   width: number;
   height: number;
+  charging_stations?: { id: string; x: number; y: number }[];
+  supply_depots?: { id: string; x: number; y: number }[];
 }
 
 export interface WorldMetricsResponse {

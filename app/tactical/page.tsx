@@ -97,7 +97,7 @@ export default function TacticalPage() {
   const [pulse, setPulse] = useState(0);
   const [gridSize, setGridSize] = useState(20);
   const [viewMode, setViewMode] = useState<"2d" | "3d">("3d");
-  const [infra, setInfra] = useState<any>({ chargingStations: [], supplyDepots: [] });
+  const [infra, setInfra] = useState<{ chargingStations: { id: string; x: number; y: number }[], supplyDepots: { id: string; x: number; y: number }[] }>({ chargingStations: [], supplyDepots: [] });
 
   const cells = useMemo(() => {
     const list: { x: number; y: number }[] = [];
@@ -196,7 +196,12 @@ export default function TacticalPage() {
       try {
         const mapData = await api.world.getMap();
         setGridSize(mapData.width || 20);
-        if (mapData.map) {
+        if (mapData.charging_stations && mapData.supply_depots) {
+          setInfra({
+            chargingStations: mapData.charging_stations,
+            supplyDepots: mapData.supply_depots,
+          });
+        } else if (mapData.map) {
           const { chargingStations, supplyDepots } = parseMapMetadata(mapData.map);
           setInfra({ chargingStations, supplyDepots });
         }
@@ -383,8 +388,8 @@ export default function TacticalPage() {
                       const key = `${cell.x}-${cell.y}`;
                       const cellDrones = dronesByCell.get(key) ?? [];
                       const cellSurvivors = survivorsByCell.get(key) ?? [];
-                      const isCS = infra.chargingStations.some((cs: any) => cs.x === cell.x && cs.y === cell.y);
-                      const isDepot = infra.supplyDepots.some((d: any) => d.x === cell.x && d.y === cell.y);
+                      const isCS = infra.chargingStations.some((cs) => cs.x === cell.x && cs.y === cell.y);
+                      const isDepot = infra.supplyDepots.some((d) => d.x === cell.x && d.y === cell.y);
                       const hasDrones = cellDrones.length > 0;
                       const hasSurvivors = cellSurvivors.length > 0;
 
