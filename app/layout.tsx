@@ -3,6 +3,7 @@ import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Header from "@/components/header";
+import SplashScreenClient from "@/components/SplashScreenClient";
 
 const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
@@ -35,6 +36,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <TooltipProvider>
+          <SplashScreenClient />
           <div className="flex min-h-screen w-full flex-col">
             <Header />
             <main className="flex min-h-0 flex-1 flex-col">{children}</main>
