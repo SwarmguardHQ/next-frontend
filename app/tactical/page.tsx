@@ -62,10 +62,19 @@ function parseMapMetadata(gridText: string) {
     if (isNaN(y)) return;
     const content = parts[1];
 
-    for (let x = 0; x < content.length; x++) {
-      const char = content[x];
-      if (char === "C") chargingStations.push({ id: `CS-${x}-${y}`, x, y });
-      if (char === "D") supplyDepots.push({ id: `D-${x}-${y}`, x, y });
+    let strIndex = 0;
+    let gridX = 0;
+    while (strIndex < content.length) {
+      if (content.startsWith("CS", strIndex)) {
+        chargingStations.push({ id: `CS-${gridX}-${y}`, x: gridX, y });
+        strIndex += 2;
+      } else if (content.startsWith("DS", strIndex)) {
+        supplyDepots.push({ id: `D-${gridX}-${y}`, x: gridX, y });
+        strIndex += 2;
+      } else {
+        strIndex += 1;
+      }
+      gridX += 1;
     }
   });
   return { chargingStations, supplyDepots };
