@@ -116,8 +116,11 @@ export function Grid2DViewport({ children, className, toolbarClassName }: Grid2D
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.button !== 0 && e.button !== 1) return;
-      e.preventDefault();
-      (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+      try {
+        (e.target as Element).setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
       setSnapTransition(false);
       if (e.shiftKey && e.button === 0) {
         setDrag({ type: "rotate", pointerId: e.pointerId, originX: e.clientX, originDeg: deg });
@@ -152,7 +155,7 @@ export function Grid2DViewport({ children, className, toolbarClassName }: Grid2D
   const endDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (drag?.pointerId !== e.pointerId) return;
     try {
-      (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
+      (e.target as Element).releasePointerCapture(e.pointerId);
     } catch {
       /* ignore */
     }
@@ -261,7 +264,7 @@ export function Grid2DViewport({ children, className, toolbarClassName }: Grid2D
             isPanning && "cursor-grabbing",
             !isPanning && !isRotating && "cursor-grab",
           )}
-          onPointerDownCapture={onPointerDown}
+          onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
