@@ -25,6 +25,7 @@ type SelectedMapItem =
 
 type SelectedMapPanelPos = { x: number; y: number } | null;
 
+import { DndContext, DragStartEvent, DragEndEvent, useDroppable, DragOverlay } from "@dnd-kit/core";
 import { Mic, MicOff, Settings, User, Bell, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, History, ShieldAlert, Cpu, Radar, Send, Play, Terminal, Target, AlertOctagon, CheckCircle2, Clock, AlertCircle, Package, BatteryCharging, HeartPulse, Triangle, Map as MapIcon, Wifi } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -199,6 +200,7 @@ export default function TacticalPage() {
   const [scenariosData, setScenariosData] = useState<ScenariosListResponse | null>(null);
   const [selectedScenario, setSelectedScenario] = useState("");
   const [isStarting, setIsStarting] = useState(false);
+  const [activeDragItem, setActiveDragItem] = useState<{type: string, s: any} | null>(null);
 
   const { isListening, transcript, interim, supported, start, stop } = useSpeechRecognition();
   const [voiceText, setVoiceText] = useState("");
@@ -363,7 +365,7 @@ export default function TacticalPage() {
     }
   };
 
-  const executeCommand = useCallback(async (text: string) => {
+  const executeCommand = useCallback(async (text: string, targetPosition?: { x: number, y: number }, targetDrone?: string) => {
     if (!text.trim() || cmdStatus === "executing" || cmdStatus === "processing") return;
     const scenarioId = classifyIntent(text);
     const scenario = SCENARIOS[scenarioId];
@@ -379,16 +381,57 @@ export default function TacticalPage() {
     }
 
     setCmdStatus("executing");
-    setFeedback(`Executing: ${scenario.label}`);
+    
+    // UI Demonstration Injection: Modify local state temporarily to show action
+    let target = targetDrone || (selectedMapItem?.kind === "drone" ? selectedMapItem.data.drone_id : null) || drones[0]?.drone_id;
+    let originalPosition = { x: 0, y: 0 };
+    
+    if (targetPosition && target) {
+       setFeedback(`[DEMO] Sending ${target} to (${targetPosition.x}, ${targetPosition.y})`);
+       setDrones((prevDrones) => {
+         const newDrones = [...prevDrones];
+         const idx = newDrones.findIndex((d) => d.drone_id === target);
+         if (idx !== -1) {
+            originalPosition = { ...newDrones[idx].position };
+            newDrones[idx] = { 
+               ...newDrones[idx], 
+               status: 'flying',
+               position: { x: targetPosition.x, y: targetPosition.y } 
+            };
+         }
+         return newDrones;
+       });
+    } else {
+       setFeedback(`Executing: ${scenario.label}`);
+    }
 
     for (let i = 0; i < scenario.steps.length; i++) {
+      if (targetPosition) {
+         setFeedback(`[DEMO] ${target} is performing: ${scenario.steps[i]}`);
+      }
       await new Promise((r) => setTimeout(r, 700 + Math.random() * 400));
+    }
+
+    // Revert demo position
+    if (targetPosition && target) {
+      setDrones((prevDrones) => {
+         const newDrones = [...prevDrones];
+         const idx = newDrones.findIndex((d) => d.drone_id === target);
+         if (idx !== -1) {
+            newDrones[idx] = { 
+               ...newDrones[idx], 
+               status: 'idle',
+               position: originalPosition 
+            };
+         }
+         return newDrones;
+       });
     }
 
     setCmdStatus("done");
     setFeedback(`${scenario.label} — complete`);
     setTimeout(() => { setCmdStatus("idle"); setFeedback(""); }, 2500);
-  }, [cmdStatus]);
+  }, [cmdStatus, drones, selectedMapItem]);
 
   useEffect(() => {
     if (!isListening && transcript && cmdStatus === "idle") {
@@ -401,13 +444,49 @@ export default function TacticalPage() {
   const isCmdActive = cmdStatus === "executing" || cmdStatus === "processing";
   const sortedMissions = missionsData?.missions?.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()) ?? [];
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const { type, s } = active.data.current ?? {};
+    if (type && s) setActiveDragItem({ type, s });
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveDragItem(null);
+    const { active, over, active: { rect: { current: { translated } } } } = event as any;
+    if (over && over.id === "map-drop-zone") {
+      const commandType = active.data.current?.type;
+      if (commandType && translated) {
+        
+        let targetX = 0;
+        let targetY = 0;
+        const panelRect = mapBodyRef.current?.getBoundingClientRect();
+        
+        if (panelRect) {
+           const relativeX = translated.left - panelRect.left;
+           const relativeY = translated.top - panelRect.top;
+           targetX = Math.round((relativeX / panelRect.width) * gridSize);
+           targetY = gridSize - Math.round((relativeY / panelRect.height) * gridSize); 
+        }
+
+        executeCommand(commandType, { x: targetX, y: targetY });
+      } else if (commandType) {
+        executeCommand(commandType);
+      }
+    }
+  };
+
+  const { setNodeRef: mapDropRef } = useDroppable({
+    id: "map-drop-zone",
+  });
+
   return (
+    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
     <div className="fixed top-16 left-0 right-0 bottom-0 flex flex-col overflow-hidden bg-background font-mono text-muted-foreground">
       {/* ---------- MAIN WORKSPACE ---------- */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         
           {/* Map Body */}
-          <div ref={mapBodyRef} className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
+          <div ref={(node) => { mapDropRef(node); if (mapBodyRef) (mapBodyRef as any).current = node; }} className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
             <div className="relative flex-1">
               <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2">
                 <div className="flex rounded-md border border-cyan-900/50 bg-black/60 p-1 backdrop-blur-md">
@@ -858,13 +937,15 @@ export default function TacticalPage() {
             </div>
 
             {/* Quick Commands */}
-            {/* We wrap QuickCommands here, styling might need to be global, but we can just drop it in. */}
-            {/* <div className="border-t border-white/10 pt-6">
-               <h3 className="text-xs font-semibold tracking-widest text-slate-300 uppercase mb-3">Quick Actions</h3>
-               <div className="opacity-80 hover:opacity-100 transition-opacity grayscale-[50%] contrast-125">
-                  <QuickCommands disabled={isCmdActive} onCommand={executeCommand} />
-               </div>
-            </div> */}
+            <div className="space-y-4 border-t border-white/10 pt-6">
+              <h3 className="text-xs font-semibold tracking-widest text-slate-300 uppercase flex items-center gap-2">
+                <Target className="w-4 h-4 text-cyan-400" /> Quick Commands
+              </h3>
+              <div className="opacity-80 hover:opacity-100 transition-opacity">
+                <QuickCommands disabled={isCmdActive} onCommand={executeCommand} />
+              </div>
+            </div>
+
             {/* Footer */}
           </div>
             <div className="shrink-0 flex justify-between items-center text-[8px] text-slate-600 tracking-widest border-t border-white/5 mb-2 p-4">
@@ -894,7 +975,6 @@ export default function TacticalPage() {
           </button>
 
           <div className="flex flex-col h-full p-6 text-xs uppercase tracking-wider relative">
-
 
             {/* Active Deployments Table */}
             <div className="border-b border-white/10 pb-6 mb-6">
@@ -1018,6 +1098,18 @@ export default function TacticalPage() {
 
       </div>
     </div>
+    <DragOverlay>
+      {activeDragItem ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 border-cyan-400 bg-cyan-950/60 text-xs text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.5)]"
+        >
+          {activeDragItem.s.icon} {activeDragItem.type}
+        </Button>
+      ) : null}
+    </DragOverlay>
+    </DndContext>
   );
 }
 
