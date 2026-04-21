@@ -389,7 +389,7 @@ export default function TacticalPage() {
     if (!selectedScenario) return;
     try {
       setIsStarting(true);
-      const res = await api.missions.create({ scenarios: selectedScenario });
+      const res = await api.missions.create({ scenarios: selectedScenario, online_mode: true });
       setSelectedScenario("");
       if (res && res.mission_id) {
         setActiveMissionId(res.mission_id);

@@ -223,14 +223,14 @@ export default function DashboardPage() {
     const nextState = !isLlamaFallback;
     setIsLlamaFallback(nextState);
     
-    // Mock API call to backend (to be replaced with actual endpoint)
     try {
-      console.log(`Mocking request: Sending { useLlama: ${nextState} } to backend endpoint...`);
-      // await fetch('/api/v1/agent/toggle-model', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ useLlama: nextState }),
-      // });
+      // online_mode is true when we are NOT in Llama fallback
+      await api.missions.create({
+        scenarios: "default",
+        custom_prompt: "",
+        online_mode: !nextState
+      });
+      console.log(`Successfully configured mission connection status: online_mode = ${!nextState}`);
     } catch (e) {
       console.error("Failed to toggle model via API", e);
     }
@@ -410,7 +410,7 @@ export default function DashboardPage() {
             onClick={handleToggleBaseLink}
             className="rounded border border-red-500/40 bg-red-500/10 px-3 py-1 text-xs text-red-400 hover:bg-red-500/20 transition-colors"
           >
-            Toggle Base Link
+            Toggle Connection
           </button>
           
           <Badge
