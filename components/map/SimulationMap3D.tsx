@@ -66,7 +66,7 @@ interface Props {
 function droneColor(status: string): Color4 {
   if (status === "charging") return [34, 197, 94, 230];
   if (status === "offline") return [239, 68, 68, 200];
-  if (status === "returning") return [245, 158, 11, 230];
+  if (status === "relay") return [245, 158, 11, 230];
   return [61, 158, 228, 240];
 }
 
@@ -323,7 +323,7 @@ export default function SimulationMap3D({
       id: "depot-labels",
       data: supplyDepots,
       getPosition: (d) => toCoord(d.x, d.y),
-      getText: (d) => `📦 DEPOT ${d.id.split("-").pop()}`,
+      getText: (d) => `DEPOT ${d.id.split("-").pop()}`,
       getSize: 14,
       getColor: [56, 189, 248, 255],
       getTextAnchor: "middle",
