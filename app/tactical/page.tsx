@@ -25,7 +25,7 @@ type SelectedMapItem =
 
 type SelectedMapPanelPos = { x: number; y: number } | null;
 
-import { Mic, MicOff, Settings, User, Bell, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, History, ShieldAlert, Cpu, Radar, Send, Play, Terminal, Target, AlertOctagon, CheckCircle2, Clock, AlertCircle, Package, BatteryCharging, HeartPulse, Triangle, Map as MapIcon, Wifi } from "lucide-react";
+import { Mic, MicOff, Settings, User, Bell, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, History, ShieldAlert, Cpu, Radar, Send, Play, Terminal, Target, AlertOctagon, CheckCircle2, Clock, AlertCircle, Package, BatteryCharging, HeartPulse, Triangle, Map as MapIcon, Wifi, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -993,7 +993,112 @@ export default function TacticalPage() {
             {rightOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
 
-          <div className="flex flex-col h-full p-6 text-xs uppercase tracking-wider relative">
+          <div className="flex flex-col h-full p-6 text-xs uppercase tracking-wider relative overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
+
+            {/* Drone Activity Matrix */}
+            <div className="border-b border-white/10 pb-6 mb-6">
+              <h3 className="text-xs font-bold tracking-widest text-slate-300 uppercase mb-3 flex items-center gap-2">
+                <Activity className="w-4 h-4 text-cyan-400" /> Swarm Task Matrix
+              </h3>
+              <div className="border border-cyan-900/50 bg-black/40 rounded-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-cyan-900/50 hover:bg-transparent">
+                      <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-slate-500">Drone</TableHead>
+                      <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-slate-500">Task / Payload</TableHead>
+                      <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-right text-slate-500">Pos</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {drones.map((drone) => {
+                      let currentTask = null;
+                      const droneName = drone.drone_id.toUpperCase();
+                      for (let i = missionLogs.length - 1; i >= 0; i--) {
+                        const log = missionLogs[i];
+                        if (log.reasoning && log.reasoning.includes(droneName)) {
+                          currentTask = log.reasoning;
+                          break;
+                        }
+                        if (log.message && log.message.includes(droneName)) {
+                          currentTask = log.message;
+                          break;
+                        }
+                      }
+
+                      if (currentTask) {
+                        const lowerLog = currentTask.toLowerCase();
+                        if (lowerLog.includes("anomaly detected") && lowerLog.includes("offline")) {
+                          currentTask = "Recover offline drone";
+                        } else if (lowerLog.includes("executing won claim on 'sector_")) {
+                          const m = currentTask.match(/sector_(\d+)/i);
+                          currentTask = m ? `Scan Sector ${m[1]}` : "Scan Sector";
+                        } else if (lowerLog.includes("relay") && lowerLog.includes("deployed to")) {
+                          currentTask = "Deploy relay drone";
+                        } else if (lowerLog.includes("rescue directive:")) {
+                          const mMatch = currentTask.match(/→\s*(S\d+)\s*\(([^)]+)\)/i);
+                          if (mMatch) {
+                            const payloadFormatted = mMatch[2] === "medical_kit" ? "Medical Kit" : mMatch[2].charAt(0).toUpperCase() + mMatch[2].slice(1).toLowerCase();
+                            currentTask = `Rescue ${mMatch[1].toUpperCase()} (${payloadFormatted})`;
+                          } else {
+                            currentTask = "Rescue Survivor";
+                          }
+                        } else if (lowerLog.includes("auto-recharge triggered")) {
+                          currentTask = "Recharge drone battery";
+                        } else if (lowerLog.includes("rescuing s")) {
+                          const m = currentTask.match(/rescuing\s+(S\d+)/i);
+                          currentTask = m ? `Rescuing ${m[1].toUpperCase()}` : "Rescuing Survivor";
+                        } else if (lowerLog.includes("scanning sector")) {
+                          const m = currentTask.match(/scanning\s+sector\s+(\d+)/i);
+                          currentTask = m ? `Scanning Sector ${m[1]}` : "Scanning Sector";
+                        } else {
+                          // Clean up log format: remove brackets, emojis, drone name, arrows
+                          const clean = currentTask
+                            .replace(/\[.*?\]/g, "")
+                            .replace(/[^\x00-\x7F]/g, "")
+                            .replace(droneName, "")
+                            .replace(/drone_\w+/ig, "")
+                            .replace(/->/g, "")
+                            .trim();
+                          const words = clean.split(/\s+/).filter(w => w.length > 0).slice(0, 4);
+                          currentTask = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+                          if (!currentTask) currentTask = "En Route";
+                        }
+                      }
+
+                      return (
+                      <TableRow key={drone.drone_id} className="border-cyan-900/30 hover:bg-cyan-950/40 transition-colors">
+                        <TableCell className="font-bold uppercase text-cyan-300 text-[10px] px-3 py-2 w-16">
+                          {drone.drone_id.replace("drone_", "")}
+                        </TableCell>
+                        <TableCell className="px-3 py-2 text-[10px] text-slate-300">
+                          <div className="flex flex-col gap-0.5">
+                            <div>
+                              <span className={cn("font-semibold", droneColor(drone.status))}>{drone.status.toUpperCase()}</span>
+                              {drone.payload ? ` · ${drone.payload.replace(/_/g, " ")}` : ""}
+                            </div>
+                            {currentTask && (
+                              <div className="text-[9px] text-slate-400 italic line-clamp-2" title={currentTask}>
+                                {currentTask}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-3 py-2 text-[10px] text-slate-500 font-mono tracking-widest w-16 align-top pt-2.5 whitespace-nowrap text-right">
+                          ({Math.round(drone.position.x)}, {Math.round(drone.position.y)})
+                        </TableCell>
+                      </TableRow>
+                    )})}
+                    {drones.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center py-6 text-[10px] uppercase tracking-widest text-slate-500">
+                          NO DRONES DETECTED
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
 
             {/* Active Deployments Table */}
             <div className="border-b border-white/10 pb-6 mb-6">
