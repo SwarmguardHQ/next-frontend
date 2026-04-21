@@ -89,7 +89,7 @@ function clamp(value: number, min: number, max: number): number {
 function droneColor(status: string): string {
   if (status === "charging") return "text-emerald-400";
   if (status === "offline") return "text-red-500";
-  if (status === "relay") return "text-amber-400";
+  if (status === "returning") return "text-amber-400";
   if (status === "scanning" || status === "flying") return "text-sky-400";
   return "text-slate-400";
 }
@@ -813,7 +813,7 @@ export default function TacticalPage() {
                     <span className="text-cyan-500/70 font-bold mb-1 tracking-widest text-[9px]">Drones</span>
                     <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-cyan-400" /> Active</div>
                     <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-emerald-400" /> Charging</div>
-                    <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-amber-400" /> Relay</div>
+                    <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-amber-400" /> Returning</div>
                     <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-red-500 rotate-180" /> Offline</div>
                   </div>
                   <div className="flex flex-col gap-2.5 border-l border-cyan-900/30 pl-8">
