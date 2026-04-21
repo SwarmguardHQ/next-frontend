@@ -523,6 +523,12 @@ export default function TacticalPage() {
                       const isDepot = infra.supplyDepots.some((d: any) => d.x === cell.x && d.y === cell.y);
                       const hasDrones = cellDrones.length > 0;
                       const hasSurvivors = cellSurvivors.length > 0;
+                      const sector = [
+                        { id: "sector_1", type: "School", x: 5, y: 2 },
+                        { id: "sector_2", type: "Industrial", x: 12, y: 12 },
+                        { id: "sector_3", type: "Residential", x: 2, y: 16 },
+                        { id: "sector_4", type: "Commercial", x: 14, y: 6 },
+                      ].find(s => s.x === cell.x && s.y === cell.y);
 
                       const heatVal =
                         simHeat != null &&
@@ -584,6 +590,19 @@ export default function TacticalPage() {
                           )}
                           {(hasSurvivors || hasDrones) && (
                             <span className="absolute inset-0 rounded-xs ring-1 ring-sky-400/40" />
+                          )}
+                          {sector && (
+                            <>
+                              <div
+                                className="absolute pointer-events-none border-[3px] border-cyan-400 z-10 opacity-70"
+                                style={{ width: "300%", height: "300%", left: "-100%", top: "-100%" }}
+                              />
+                              <div className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center">
+                                <span className="text-center text-[9.5px] font-black text-cyan-400 uppercase tracking-widest leading-none bg-sky-950/90 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(34,211,238,0.5)] border border-cyan-400/80">
+                                  {sector.id.replace('sector_', 'SEC ')}
+                                </span>
+                              </div>
+                            </>
                           )}
                           <div className="flex flex-wrap items-center justify-center gap-2 p-1 z-20 relative content-center text-center">
                             {cellSurvivors.map((s) => (
