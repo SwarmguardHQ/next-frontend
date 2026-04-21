@@ -25,8 +25,7 @@ type SelectedMapItem =
 
 type SelectedMapPanelPos = { x: number; y: number } | null;
 
-import { DndContext, DragStartEvent, DragEndEvent, useDroppable, DragOverlay } from "@dnd-kit/core";
-import { Mic, MicOff, Settings, User, Bell, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, History, ShieldAlert, Cpu, Radar, Send, Play, Terminal, Target, AlertOctagon, CheckCircle2, Clock, AlertCircle, Package, BatteryCharging, HeartPulse, Triangle, Map as MapIcon, Wifi } from "lucide-react";
+import { Mic, MicOff, Settings, User, Bell, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, History, ShieldAlert, Cpu, Radar, Send, Play, Terminal, Target, AlertOctagon, CheckCircle2, Clock, AlertCircle, Package, BatteryCharging, HeartPulse, Triangle, Map as MapIcon, Wifi, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -37,7 +36,8 @@ import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { classifyIntent, SCENARIOS } from "@/lib/drone-scenarios";
 import { CommandStatus, DroneScenario } from "@/types/drone";
 import { MissionsListResponse, ScenariosListResponse } from "@/types/api_types";
-import { QuickCommands } from "@/components/drone-command/quick-commands";
+import { QuickCommands, INCIDENT_EVENTS } from "@/components/drone-command/quick-commands";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import dynamic from "next/dynamic";
 import type { Drone, Survivor, WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
 import { useWorldStream } from "@/lib/useWorldStream";
@@ -125,6 +125,42 @@ export default function TacticalPage() {
   const [selectedMapPanelPos, setSelectedMapPanelPos] = useState<SelectedMapPanelPos>(null);
   const mapBodyRef = useRef<HTMLDivElement>(null);
 
+  const [eventModalOpen, setEventModalOpen] = useState(false);
+  const [pendingEvent, setPendingEvent] = useState<typeof INCIDENT_EVENTS[0] | null>(null);
+  const [eventCoords, setEventCoords] = useState<{ x: string, y: string }>({ x: "", y: "" });
+
+  const handleEventAction = (eventId: string) => {
+     const ev = INCIDENT_EVENTS.find(e => e.id === eventId);
+     if (ev) {
+         setPendingEvent(ev);
+         setEventCoords({ x: "", y: "" });
+         setEventModalOpen(true);
+     }
+  };
+
+  const submitEvent = async () => {
+      if (!pendingEvent || !eventCoords.x || !eventCoords.y) return;
+      const parsedX = parseInt(eventCoords.x, 10);
+      const parsedY = parseInt(eventCoords.y, 10);
+      
+      const insight = `There is a ${pendingEvent.label.toLowerCase()} at (${parsedX}, ${parsedY})`;
+      
+      setFeedback(`Reporting: ${insight}`);
+      try {
+          // Mock API Call endpoint blank
+          // await fetch('/api/report-insight', { method: 'POST', body: JSON.stringify({ insight }) });
+          console.log("Payload to endpoint:", JSON.stringify({ insight }));
+          setTimeout(() => setFeedback(`AI Agent analyzing Swarm response to: ${insight}`), 1000);
+          setTimeout(() => setFeedback(""), 5000);
+      } catch (err) {
+          console.error("Failed to report event", err);
+          setFeedback("Failed to reach agent endpoint.");
+      }
+      
+      setEventModalOpen(false);
+      setPendingEvent(null);
+  };
+
   const openSelectedMapItem = useCallback(
     (event: React.MouseEvent<HTMLElement>, item: NonNullable<SelectedMapItem>) => {
       const panelWidth = 224;
@@ -200,7 +236,6 @@ export default function TacticalPage() {
   const [scenariosData, setScenariosData] = useState<ScenariosListResponse | null>(null);
   const [selectedScenario, setSelectedScenario] = useState("");
   const [isStarting, setIsStarting] = useState(false);
-  const [activeDragItem, setActiveDragItem] = useState<{type: string, s: any} | null>(null);
 
   const { isListening, transcript, interim, supported, start, stop } = useSpeechRecognition();
   const [voiceText, setVoiceText] = useState("");
@@ -354,7 +389,7 @@ export default function TacticalPage() {
     if (!selectedScenario) return;
     try {
       setIsStarting(true);
-      const res = await api.missions.create({ scenarios: selectedScenario });
+      const res = await api.missions.create({ scenarios: selectedScenario, online_mode: true });
       setSelectedScenario("");
       if (res && res.mission_id) {
         setActiveMissionId(res.mission_id);
@@ -444,49 +479,14 @@ export default function TacticalPage() {
   const isCmdActive = cmdStatus === "executing" || cmdStatus === "processing";
   const sortedMissions = missionsData?.missions?.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()) ?? [];
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    const { type, s } = active.data.current ?? {};
-    if (type && s) setActiveDragItem({ type, s });
-  };
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    setActiveDragItem(null);
-    const { active, over, active: { rect: { current: { translated } } } } = event as any;
-    if (over && over.id === "map-drop-zone") {
-      const commandType = active.data.current?.type;
-      if (commandType && translated) {
-        
-        let targetX = 0;
-        let targetY = 0;
-        const panelRect = mapBodyRef.current?.getBoundingClientRect();
-        
-        if (panelRect) {
-           const relativeX = translated.left - panelRect.left;
-           const relativeY = translated.top - panelRect.top;
-           targetX = Math.round((relativeX / panelRect.width) * gridSize);
-           targetY = gridSize - Math.round((relativeY / panelRect.height) * gridSize); 
-        }
-
-        executeCommand(commandType, { x: targetX, y: targetY });
-      } else if (commandType) {
-        executeCommand(commandType);
-      }
-    }
-  };
-
-  const { setNodeRef: mapDropRef } = useDroppable({
-    id: "map-drop-zone",
-  });
-
   return (
-    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <>
     <div className="fixed top-16 left-0 right-0 bottom-0 flex flex-col overflow-hidden bg-background font-mono text-muted-foreground">
       {/* ---------- MAIN WORKSPACE ---------- */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         
           {/* Map Body */}
-          <div ref={(node) => { mapDropRef(node); if (mapBodyRef) (mapBodyRef as any).current = node; }} className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
+          <div ref={(node) => { if (mapBodyRef) (mapBodyRef as any).current = node; }} className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
             <div className="relative flex-1">
               <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2">
                 <div className="flex rounded-md border border-cyan-900/50 bg-black/60 p-1 backdrop-blur-md">
@@ -523,6 +523,12 @@ export default function TacticalPage() {
                       const isDepot = infra.supplyDepots.some((d: any) => d.x === cell.x && d.y === cell.y);
                       const hasDrones = cellDrones.length > 0;
                       const hasSurvivors = cellSurvivors.length > 0;
+                      const sector = [
+                        { id: "sector_1", type: "School", x: 5, y: 2 },
+                        { id: "sector_2", type: "Industrial", x: 12, y: 12 },
+                        { id: "sector_3", type: "Residential", x: 2, y: 16 },
+                        { id: "sector_4", type: "Commercial", x: 14, y: 6 },
+                      ].find(s => s.x === cell.x && s.y === cell.y);
 
                       const heatVal =
                         simHeat != null &&
@@ -584,6 +590,19 @@ export default function TacticalPage() {
                           )}
                           {(hasSurvivors || hasDrones) && (
                             <span className="absolute inset-0 rounded-xs ring-1 ring-sky-400/40" />
+                          )}
+                          {sector && (
+                            <>
+                              <div
+                                className="absolute pointer-events-none border-[3px] border-cyan-400 z-10 opacity-70"
+                                style={{ width: "300%", height: "300%", left: "-100%", top: "-100%" }}
+                              />
+                              <div className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center">
+                                <span className="text-center text-[9.5px] font-black text-cyan-400 uppercase tracking-widest leading-none bg-sky-950/90 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(34,211,238,0.5)] border border-cyan-400/80">
+                                  {sector.id.replace('sector_', 'SEC ')}
+                                </span>
+                              </div>
+                            </>
                           )}
                           <div className="flex flex-wrap items-center justify-center gap-2 p-1 z-20 relative content-center text-center">
                             {cellSurvivors.map((s) => (
@@ -939,10 +958,10 @@ export default function TacticalPage() {
             {/* Quick Commands */}
             <div className="space-y-4 border-t border-white/10 pt-6">
               <h3 className="text-xs font-semibold tracking-widest text-slate-300 uppercase flex items-center gap-2">
-                <Target className="w-4 h-4 text-cyan-400" /> Quick Commands
+                <Target className="w-4 h-4 text-red-500" /> Incident Reporting
               </h3>
               <div className="opacity-80 hover:opacity-100 transition-opacity">
-                <QuickCommands disabled={isCmdActive} onCommand={executeCommand} />
+                <QuickCommands disabled={isCmdActive} onEventAction={handleEventAction} />
               </div>
             </div>
 
@@ -974,7 +993,112 @@ export default function TacticalPage() {
             {rightOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
 
-          <div className="flex flex-col h-full p-6 text-xs uppercase tracking-wider relative">
+          <div className="flex flex-col h-full p-6 text-xs uppercase tracking-wider relative overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
+
+            {/* Drone Activity Matrix */}
+            <div className="border-b border-white/10 pb-6 mb-6">
+              <h3 className="text-xs font-bold tracking-widest text-slate-300 uppercase mb-3 flex items-center gap-2">
+                <Activity className="w-4 h-4 text-cyan-400" /> Swarm Task Matrix
+              </h3>
+              <div className="border border-cyan-900/50 bg-black/40 rounded-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-cyan-900/50 hover:bg-transparent">
+                      <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-slate-500">Drone</TableHead>
+                      <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-slate-500">Task / Payload</TableHead>
+                      <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-right text-slate-500">Pos</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {drones.map((drone) => {
+                      let currentTask = null;
+                      const droneName = drone.drone_id.toUpperCase();
+                      for (let i = missionLogs.length - 1; i >= 0; i--) {
+                        const log = missionLogs[i];
+                        if (log.reasoning && log.reasoning.includes(droneName)) {
+                          currentTask = log.reasoning;
+                          break;
+                        }
+                        if (log.message && log.message.includes(droneName)) {
+                          currentTask = log.message;
+                          break;
+                        }
+                      }
+
+                      if (currentTask) {
+                        const lowerLog = currentTask.toLowerCase();
+                        if (lowerLog.includes("anomaly detected") && lowerLog.includes("offline")) {
+                          currentTask = "Recover offline drone";
+                        } else if (lowerLog.includes("executing won claim on 'sector_")) {
+                          const m = currentTask.match(/sector_(\d+)/i);
+                          currentTask = m ? `Scan Sector ${m[1]}` : "Scan Sector";
+                        } else if (lowerLog.includes("relay") && lowerLog.includes("deployed to")) {
+                          currentTask = "Deploy relay drone";
+                        } else if (lowerLog.includes("rescue directive:")) {
+                          const mMatch = currentTask.match(/→\s*(S\d+)\s*\(([^)]+)\)/i);
+                          if (mMatch) {
+                            const payloadFormatted = mMatch[2] === "medical_kit" ? "Medical Kit" : mMatch[2].charAt(0).toUpperCase() + mMatch[2].slice(1).toLowerCase();
+                            currentTask = `Rescue ${mMatch[1].toUpperCase()} (${payloadFormatted})`;
+                          } else {
+                            currentTask = "Rescue Survivor";
+                          }
+                        } else if (lowerLog.includes("auto-recharge triggered")) {
+                          currentTask = "Recharge drone battery";
+                        } else if (lowerLog.includes("rescuing s")) {
+                          const m = currentTask.match(/rescuing\s+(S\d+)/i);
+                          currentTask = m ? `Rescuing ${m[1].toUpperCase()}` : "Rescuing Survivor";
+                        } else if (lowerLog.includes("scanning sector")) {
+                          const m = currentTask.match(/scanning\s+sector\s+(\d+)/i);
+                          currentTask = m ? `Scanning Sector ${m[1]}` : "Scanning Sector";
+                        } else {
+                          // Clean up log format: remove brackets, emojis, drone name, arrows
+                          const clean = currentTask
+                            .replace(/\[.*?\]/g, "")
+                            .replace(/[^\x00-\x7F]/g, "")
+                            .replace(droneName, "")
+                            .replace(/drone_\w+/ig, "")
+                            .replace(/->/g, "")
+                            .trim();
+                          const words = clean.split(/\s+/).filter(w => w.length > 0).slice(0, 4);
+                          currentTask = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+                          if (!currentTask) currentTask = "En Route";
+                        }
+                      }
+
+                      return (
+                      <TableRow key={drone.drone_id} className="border-cyan-900/30 hover:bg-cyan-950/40 transition-colors">
+                        <TableCell className="font-bold uppercase text-cyan-300 text-[10px] px-3 py-2 w-16">
+                          {drone.drone_id.replace("drone_", "")}
+                        </TableCell>
+                        <TableCell className="px-3 py-2 text-[10px] text-slate-300">
+                          <div className="flex flex-col gap-0.5">
+                            <div>
+                              <span className={cn("font-semibold", droneColor(drone.status))}>{drone.status.toUpperCase()}</span>
+                              {drone.payload ? ` · ${drone.payload.replace(/_/g, " ")}` : ""}
+                            </div>
+                            {currentTask && (
+                              <div className="text-[9px] text-slate-400 italic line-clamp-2" title={currentTask}>
+                                {currentTask}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-3 py-2 text-[10px] text-slate-500 font-mono tracking-widest w-16 align-top pt-2.5 whitespace-nowrap text-right">
+                          ({Math.round(drone.position.x)}, {Math.round(drone.position.y)})
+                        </TableCell>
+                      </TableRow>
+                    )})}
+                    {drones.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center py-6 text-[10px] uppercase tracking-widest text-slate-500">
+                          NO DRONES DETECTED
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
 
             {/* Active Deployments Table */}
             <div className="border-b border-white/10 pb-6 mb-6">
@@ -1098,18 +1222,53 @@ export default function TacticalPage() {
 
       </div>
     </div>
-    <DragOverlay>
-      {activeDragItem ? (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5 border-cyan-400 bg-cyan-950/60 text-xs text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.5)]"
-        >
-          {activeDragItem.s.icon} {activeDragItem.type}
-        </Button>
-      ) : null}
-    </DragOverlay>
-    </DndContext>
+
+    <Dialog open={eventModalOpen} onOpenChange={setEventModalOpen}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 pointer-events-auto sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex gap-2 items-center text-slate-100">
+              {pendingEvent?.icon} Report {pendingEvent?.label} Incident
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Agents will automatically re-allocate drone swarms based on this insight input.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label htmlFor="coord-x" className="text-xs text-slate-400 font-mono tracking-wider">Coordinate X</label>
+                <Input 
+                   id="coord-x" 
+                   type="number" 
+                   value={eventCoords.x} 
+                   onChange={(e) => setEventCoords({ ...eventCoords, x: e.target.value })} 
+                   placeholder="12" 
+                   className="bg-slate-950 border-slate-700 text-slate-100" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="coord-y" className="text-xs text-slate-400 font-mono tracking-wider">Coordinate Y</label>
+                <Input 
+                   id="coord-y" 
+                   type="number" 
+                   value={eventCoords.y} 
+                   onChange={(e) => setEventCoords({ ...eventCoords, y: e.target.value })} 
+                   placeholder="2" 
+                   className="bg-slate-950 border-slate-700 text-slate-100" 
+                />
+              </div>
+            </div>
+            <div className="mt-2 p-3 bg-red-950/20 border border-red-900/50 rounded-md font-mono text-sm text-red-200/80">
+              &#123;"insight": "There is a {pendingEvent?.label.toLowerCase()} at ({eventCoords.x || "0"}, {eventCoords.y || "0"})"&#125;
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEventModalOpen(false)} className="border-slate-700 text-slate-400 hover:text-slate-100 hover:bg-slate-800">Cancel</Button>
+            <Button onClick={submitEvent} className="bg-red-600 hover:bg-red-500 text-white">Broadcast Insight</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
