@@ -42,7 +42,7 @@ function FleetCard({ drone, onClick }: { drone: Drone; onClick: () => void }) {
     }, [drone.drone_id, flying]);
 
     const statusColorMap: Record<string, string> = {
-        flying: "#3b82f6", scanning: "#10b981", returning: "#f59e0b",
+        flying: "#3b82f6", scanning: "#10b981", relay: "#f59e0b",
         delivering: "#f59e0b", charging: "#22c55e", idle: "#64748b", offline: "#ef4444",
     };
     const statusColor = statusColorMap[drone.status] ?? "#64748b";
