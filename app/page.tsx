@@ -201,6 +201,41 @@ export default function DashboardPage() {
     });
   }, []);
 
+  // ── Connection fallback state ──
+  const [isLlamaFallback, setIsLlamaFallback] = useState(false);
+  const [lostDuration, setLostDuration] = useState(0);
+
+  useEffect(() => {
+    let timer: number | undefined;
+    if (isLlamaFallback) {
+      timer = window.setInterval(() => {
+        setLostDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setLostDuration(0);
+    }
+    return () => window.clearInterval(timer);
+  }, [isLlamaFallback]);
+  
+  const formattedDuration = `${Math.floor(lostDuration / 60)}:${(lostDuration % 60).toString().padStart(2, '0')}`;
+
+  const handleToggleBaseLink = async () => {
+    const nextState = !isLlamaFallback;
+    setIsLlamaFallback(nextState);
+    
+    // Mock API call to backend (to be replaced with actual endpoint)
+    try {
+      console.log(`Mocking request: Sending { useLlama: ${nextState} } to backend endpoint...`);
+      // await fetch('/api/v1/agent/toggle-model', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ useLlama: nextState }),
+      // });
+    } catch (e) {
+      console.error("Failed to toggle model via API", e);
+    }
+  };
+
   // ── Telemetry mount + seed events ──
   const [simVisual, setSimVisual] = useState<WorldStreamSimVisual | null>(null);
   const [mesaBusy, setMesaBusy] = useState(false);
@@ -371,6 +406,13 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleToggleBaseLink}
+            className="rounded border border-red-500/40 bg-red-500/10 px-3 py-1 text-xs text-red-400 hover:bg-red-500/20 transition-colors"
+          >
+            Toggle Base Link
+          </button>
+          
           <Badge
             className={
               worldStreamLive
@@ -384,12 +426,26 @@ export default function DashboardPage() {
           <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
             <Radar className="h-3 w-3" /> OFFLINE CAPABLE
           </Badge>
-          <Badge className="border border-emerald-400/40 bg-emerald-500/10 text-emerald-300">
-            <Wifi className="h-3 w-3" /> LIVE LINK
-          </Badge>
-          <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
-            <Target className="h-3 w-3" /> AI ALLOCATION
-          </Badge>
+          
+          {isLlamaFallback ? (
+            <>
+              <Badge className="border border-red-400/40 bg-red-500/10 text-red-500">
+                <WifiOff className="h-3 w-3 mr-1" /> BASE LINK LOST ({formattedDuration})
+              </Badge>
+              <Badge className="border border-purple-400/40 bg-purple-500/10 text-purple-300">
+                <Target className="h-3 w-3 mr-1" /> ONBOARD LLAMA
+              </Badge>
+            </>
+          ) : (
+            <>
+              <Badge className="border border-emerald-400/40 bg-emerald-500/10 text-emerald-300">
+                <Wifi className="h-3 w-3 mr-1" /> LIVE LINK
+              </Badge>
+              <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
+                <Target className="h-3 w-3 mr-1" /> AI ALLOCATION
+              </Badge>
+            </>
+          )}
           {apiError && (
             <Badge className="border border-amber-400/40 bg-amber-500/10 text-amber-300">
               <WifiOff className="h-3 w-3" /> DEMO DATA
