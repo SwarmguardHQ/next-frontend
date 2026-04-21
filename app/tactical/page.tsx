@@ -25,7 +25,6 @@ type SelectedMapItem =
 
 type SelectedMapPanelPos = { x: number; y: number } | null;
 
-import { DndContext, DragStartEvent, DragEndEvent, useDroppable, DragOverlay } from "@dnd-kit/core";
 import { Mic, MicOff, Settings, User, Bell, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, History, ShieldAlert, Cpu, Radar, Send, Play, Terminal, Target, AlertOctagon, CheckCircle2, Clock, AlertCircle, Package, BatteryCharging, HeartPulse, Triangle, Map as MapIcon, Wifi } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,7 +36,8 @@ import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { classifyIntent, SCENARIOS } from "@/lib/drone-scenarios";
 import { CommandStatus, DroneScenario } from "@/types/drone";
 import { MissionsListResponse, ScenariosListResponse } from "@/types/api_types";
-import { QuickCommands } from "@/components/drone-command/quick-commands";
+import { QuickCommands, INCIDENT_EVENTS } from "@/components/drone-command/quick-commands";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import dynamic from "next/dynamic";
 import type { Drone, Survivor, WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
 import { useWorldStream } from "@/lib/useWorldStream";
@@ -125,6 +125,42 @@ export default function TacticalPage() {
   const [selectedMapPanelPos, setSelectedMapPanelPos] = useState<SelectedMapPanelPos>(null);
   const mapBodyRef = useRef<HTMLDivElement>(null);
 
+  const [eventModalOpen, setEventModalOpen] = useState(false);
+  const [pendingEvent, setPendingEvent] = useState<typeof INCIDENT_EVENTS[0] | null>(null);
+  const [eventCoords, setEventCoords] = useState<{ x: string, y: string }>({ x: "", y: "" });
+
+  const handleEventAction = (eventId: string) => {
+     const ev = INCIDENT_EVENTS.find(e => e.id === eventId);
+     if (ev) {
+         setPendingEvent(ev);
+         setEventCoords({ x: "", y: "" });
+         setEventModalOpen(true);
+     }
+  };
+
+  const submitEvent = async () => {
+      if (!pendingEvent || !eventCoords.x || !eventCoords.y) return;
+      const parsedX = parseInt(eventCoords.x, 10);
+      const parsedY = parseInt(eventCoords.y, 10);
+      
+      const insight = `There is a ${pendingEvent.label.toLowerCase()} at (${parsedX}, ${parsedY})`;
+      
+      setFeedback(`Reporting: ${insight}`);
+      try {
+          // Mock API Call endpoint blank
+          // await fetch('/api/report-insight', { method: 'POST', body: JSON.stringify({ insight }) });
+          console.log("Payload to endpoint:", JSON.stringify({ insight }));
+          setTimeout(() => setFeedback(`AI Agent analyzing Swarm response to: ${insight}`), 1000);
+          setTimeout(() => setFeedback(""), 5000);
+      } catch (err) {
+          console.error("Failed to report event", err);
+          setFeedback("Failed to reach agent endpoint.");
+      }
+      
+      setEventModalOpen(false);
+      setPendingEvent(null);
+  };
+
   const openSelectedMapItem = useCallback(
     (event: React.MouseEvent<HTMLElement>, item: NonNullable<SelectedMapItem>) => {
       const panelWidth = 224;
@@ -200,7 +236,6 @@ export default function TacticalPage() {
   const [scenariosData, setScenariosData] = useState<ScenariosListResponse | null>(null);
   const [selectedScenario, setSelectedScenario] = useState("");
   const [isStarting, setIsStarting] = useState(false);
-  const [activeDragItem, setActiveDragItem] = useState<{type: string, s: any} | null>(null);
 
   const { isListening, transcript, interim, supported, start, stop } = useSpeechRecognition();
   const [voiceText, setVoiceText] = useState("");
@@ -444,49 +479,14 @@ export default function TacticalPage() {
   const isCmdActive = cmdStatus === "executing" || cmdStatus === "processing";
   const sortedMissions = missionsData?.missions?.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()) ?? [];
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    const { type, s } = active.data.current ?? {};
-    if (type && s) setActiveDragItem({ type, s });
-  };
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    setActiveDragItem(null);
-    const { active, over, active: { rect: { current: { translated } } } } = event as any;
-    if (over && over.id === "map-drop-zone") {
-      const commandType = active.data.current?.type;
-      if (commandType && translated) {
-        
-        let targetX = 0;
-        let targetY = 0;
-        const panelRect = mapBodyRef.current?.getBoundingClientRect();
-        
-        if (panelRect) {
-           const relativeX = translated.left - panelRect.left;
-           const relativeY = translated.top - panelRect.top;
-           targetX = Math.round((relativeX / panelRect.width) * gridSize);
-           targetY = gridSize - Math.round((relativeY / panelRect.height) * gridSize); 
-        }
-
-        executeCommand(commandType, { x: targetX, y: targetY });
-      } else if (commandType) {
-        executeCommand(commandType);
-      }
-    }
-  };
-
-  const { setNodeRef: mapDropRef } = useDroppable({
-    id: "map-drop-zone",
-  });
-
   return (
-    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <>
     <div className="fixed top-16 left-0 right-0 bottom-0 flex flex-col overflow-hidden bg-background font-mono text-muted-foreground">
       {/* ---------- MAIN WORKSPACE ---------- */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         
           {/* Map Body */}
-          <div ref={(node) => { mapDropRef(node); if (mapBodyRef) (mapBodyRef as any).current = node; }} className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
+          <div ref={(node) => { if (mapBodyRef) (mapBodyRef as any).current = node; }} className="absolute inset-0 z-0 bg-slate-950 flex flex-col">
             <div className="relative flex-1">
               <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2">
                 <div className="flex rounded-md border border-cyan-900/50 bg-black/60 p-1 backdrop-blur-md">
@@ -939,10 +939,10 @@ export default function TacticalPage() {
             {/* Quick Commands */}
             <div className="space-y-4 border-t border-white/10 pt-6">
               <h3 className="text-xs font-semibold tracking-widest text-slate-300 uppercase flex items-center gap-2">
-                <Target className="w-4 h-4 text-cyan-400" /> Quick Commands
+                <Target className="w-4 h-4 text-red-500" /> Incident Reporting
               </h3>
               <div className="opacity-80 hover:opacity-100 transition-opacity">
-                <QuickCommands disabled={isCmdActive} onCommand={executeCommand} />
+                <QuickCommands disabled={isCmdActive} onEventAction={handleEventAction} />
               </div>
             </div>
 
@@ -1098,18 +1098,53 @@ export default function TacticalPage() {
 
       </div>
     </div>
-    <DragOverlay>
-      {activeDragItem ? (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5 border-cyan-400 bg-cyan-950/60 text-xs text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.5)]"
-        >
-          {activeDragItem.s.icon} {activeDragItem.type}
-        </Button>
-      ) : null}
-    </DragOverlay>
-    </DndContext>
+
+    <Dialog open={eventModalOpen} onOpenChange={setEventModalOpen}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 pointer-events-auto sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex gap-2 items-center text-slate-100">
+              {pendingEvent?.icon} Report {pendingEvent?.label} Incident
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Agents will automatically re-allocate drone swarms based on this insight input.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label htmlFor="coord-x" className="text-xs text-slate-400 font-mono tracking-wider">Coordinate X</label>
+                <Input 
+                   id="coord-x" 
+                   type="number" 
+                   value={eventCoords.x} 
+                   onChange={(e) => setEventCoords({ ...eventCoords, x: e.target.value })} 
+                   placeholder="12" 
+                   className="bg-slate-950 border-slate-700 text-slate-100" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="coord-y" className="text-xs text-slate-400 font-mono tracking-wider">Coordinate Y</label>
+                <Input 
+                   id="coord-y" 
+                   type="number" 
+                   value={eventCoords.y} 
+                   onChange={(e) => setEventCoords({ ...eventCoords, y: e.target.value })} 
+                   placeholder="2" 
+                   className="bg-slate-950 border-slate-700 text-slate-100" 
+                />
+              </div>
+            </div>
+            <div className="mt-2 p-3 bg-red-950/20 border border-red-900/50 rounded-md font-mono text-sm text-red-200/80">
+              &#123;"insight": "There is a {pendingEvent?.label.toLowerCase()} at ({eventCoords.x || "0"}, {eventCoords.y || "0"})"&#125;
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEventModalOpen(false)} className="border-slate-700 text-slate-400 hover:text-slate-100 hover:bg-slate-800">Cancel</Button>
+            <Button onClick={submitEvent} className="bg-red-600 hover:bg-red-500 text-white">Broadcast Insight</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
