@@ -1125,64 +1125,49 @@ export default function TacticalPage() {
               </Button>
             </div>
 
-            {/* Voice Command */}
-            <div className="space-y-3 border-t border-slate-800/50 pt-5">
-              <SectionLabel icon={<Mic className="h-3 w-3 text-cyan-400" />}>Voice Override</SectionLabel>
-                <div className="flex items-center gap-2">
-                <Button
-                  type="button" variant="outline" size="icon"
-                  disabled={isCmdActive || !supported}
-                  onClick={handleMic}
-                  className={cn(
-                    "h-9 w-9 shrink-0 rounded-lg border-slate-700/60 bg-slate-900/60 text-slate-400 hover:text-cyan-400 transition-all",
-                    isListening && "border-emerald-600 bg-emerald-950/50 text-emerald-400 ring-2 ring-emerald-500/20 animate-pulse",
-                  )}
-                >
-                  {isListening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-                  </Button>
-                  <Input
-                  placeholder="e.g. patrol route"
-                      value={voiceText}
-                      disabled={isCmdActive}
-                      onChange={(e) => setVoiceText(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                  className="h-9 flex-1 rounded-lg border-slate-700/60 bg-slate-900/60 text-xs text-slate-200 placeholder:text-slate-600 focus-visible:ring-cyan-500"
-                />
-                <Button
-                  size="icon" variant="outline"
-                  disabled={isCmdActive || !voiceText.trim()}
-                  onClick={handleSend}
-                  className="h-9 w-9 shrink-0 rounded-lg border-slate-700/60 bg-slate-900/60 text-slate-400 hover:text-cyan-400"
-                >
-                  <Send className="h-3.5 w-3.5" />
+            {/* Incident Reporting */}
+            <div className="space-y-4 border-t border-white/10 pt-6">
+              <h3 className="text-xs font-semibold tracking-widest text-slate-300 uppercase flex items-center gap-2">
+                <Target className="w-4 h-4 text-red-500" /> Incident Reporting
+              </h3>
+
+              {/* Voice Override Integrated with Incident Reporting */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    disabled={isCmdActive || !supported}
+                    onClick={handleMic}
+                    className={cn(
+                      "h-9 w-9 shrink-0 rounded-lg border-slate-700/60 bg-slate-900/60 text-slate-400 hover:text-cyan-400 transition-all",
+                      isListening && "border-emerald-600 bg-emerald-950/50 text-emerald-400 ring-2 ring-emerald-500/20 animate-pulse",
+                    )}
+                  >
+                    {isListening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
                   </Button>
                 </div>
-                
-              <div className="min-h-8 rounded-lg border border-slate-800/50 bg-slate-900/40 px-2.5 py-1.5">
-                <p className={cn("text-[10px] uppercase tracking-widest leading-relaxed", (!transcript && !interim) ? "text-slate-600" : "text-emerald-400")}>
-                  {transcript || interim
-                    ? <span className="animate-pulse">{transcript}<span className="text-slate-500"> {interim}</span></span>
-                    : isListening ? "Awaiting audio…" : "Standby"}
+								
+								{/* Transcript Display */}
+                <div className="flex-1 w-full min-h-8 rounded-lg border border-slate-800/50 bg-slate-900/40 px-2.5 py-1.5">
+                  <p className={cn("text-[10px] uppercase tracking-widest leading-relaxed", (!transcript && !interim) ? "text-slate-600" : "text-emerald-400")}>
+                    {transcript || interim
+                      ? <span className="animate-pulse">{transcript}<span className="text-slate-500"> {interim}</span></span>
+                      : isListening ? "Awaiting audio…" : "Standby"}
                   </p>
                   {feedback && (
-                  <p className={cn(
-                    "mt-0.5 flex items-center gap-1.5 text-[10px] uppercase tracking-widest",
-                    cmdStatus === "error" ? "text-red-400" : cmdStatus === "done" ? "text-emerald-400" : "text-cyan-400",
-                  )}>
-                    {isCmdActive && <span className="h-1.5 w-1.5 shrink-0 animate-pulse bg-cyan-400" />}
+                    <p className={cn(
+                      "mt-0.5 flex items-center gap-1.5 text-[10px] uppercase tracking-widest",
+                      cmdStatus === "error" ? "text-red-400" : cmdStatus === "done" ? "text-emerald-400" : "text-cyan-400",
+                    )}>
+                      {isCmdActive && <span className="h-1.5 w-1.5 shrink-0 animate-pulse bg-cyan-400" />}
                       {feedback}
                     </p>
                   )}
                 </div>
               </div>
-            </div>
 
-
-						{/* Quick Commands */}
-            <div className="space-y-4 border-t border-white/10 pt-6">
-              <h3 className="text-xs font-semibold tracking-widest text-slate-300 uppercase flex items-center gap-2">
-                <Target className="w-4 h-4 text-red-500" /> Incident Reporting
-              </h3>
               <div className="opacity-80 hover:opacity-100 transition-opacity">
                 <QuickCommands disabled={isCmdActive} onEventAction={handleEventAction} />
               </div>
@@ -1324,10 +1309,10 @@ export default function TacticalPage() {
 
         {/* ---------- RIGHT PANEL: MISSION CONSOLE ---------- */}
         <div className={cn(
-          "absolute right-0 top-0 bottom-0 z-20 flex w-80 flex-col border-l border-slate-800/50 bg-slate-950/95 shadow-2xl backdrop-blur-xl transition-transform duration-300",
+          "absolute right-0 top-0 bottom-0 z-20 flex w-96 p-4 flex-col border-l border-slate-800/50 bg-slate-950/95 shadow-2xl backdrop-blur-xl transition-transform duration-300",
           rightOpen ? "translate-x-0" : "translate-x-full",
         )}>
-          <div className="relative flex h-full flex-col overflow-hidden p-4 text-xs uppercase tracking-wider">
+          <div className="relative flex h-full flex-col overflow-hidden text-xs uppercase tracking-wider">
             {/* Panel header */}
             <div className="mb-4 flex shrink-0 items-center justify-between">
               <div className="flex items-center gap-1.5">
@@ -1341,7 +1326,7 @@ export default function TacticalPage() {
               </div>
             </div>
 
-          <div className="flex flex-col h-full p-6 text-xs uppercase tracking-wider relative overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
+          <div className="flex flex-col h-full text-xs uppercase tracking-wider relative overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
 
             {/* Drone Activity Matrix */}
             <div className="border-b border-white/10 pb-6 mb-6">
@@ -1544,10 +1529,9 @@ export default function TacticalPage() {
                   )}
                 </div>
               </div>
-              </div>
             </div>
-            </div>
-						</div>
+          </div>
+        </div>
 
 				<Dialog open={eventModalOpen} onOpenChange={setEventModalOpen}>
         <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 pointer-events-auto sm:max-w-[425px]">
@@ -1594,9 +1578,9 @@ export default function TacticalPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      
-			</>
+    </div>
+  </div>
+</>
   );
 }
 
