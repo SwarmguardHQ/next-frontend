@@ -60,6 +60,8 @@ import {
   Package,
   HeartPulse,
   Triangle,
+  Thermometer,
+  ScanLine,
   Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -89,6 +91,7 @@ import {
   droneBlockyColors,
 } from "@/components/map/BlockyGameSprites";
 import { useRouter } from "next/navigation";
+import { TACTICAL_SECTORS } from "@/lib/tacticalSectors";
 
 const SimulationMap3D = dynamic(() => import("@/components/map/SimulationMap3D"), { ssr: false });
 const TacticalIsoField = dynamic(() => import("@/components/map/TacticalIsoField"), { ssr: false });
@@ -652,12 +655,7 @@ export default function TacticalPage() {
                           const isDepot = (infra.supplyDepots as MapInfraItem[]).some((d) => d.x === cell.x && d.y === cell.y);
                       const hasDrones = cellDrones.length > 0;
                       const hasSurvivors = cellSurvivors.length > 0;
-                      const sector = [
-                        { id: "sector_1", type: "School", x: 5, y: 2 },
-                        { id: "sector_2", type: "Industrial", x: 12, y: 12 },
-                        { id: "sector_3", type: "Residential", x: 2, y: 16 },
-                        { id: "sector_4", type: "Commercial", x: 14, y: 6 },
-                      ].find((s) => s.x === cell.x && s.y === cell.y);
+                          const sector = TACTICAL_SECTORS.find((s) => s.x === cell.x && s.y === cell.y);
 
                       const heatVal =
                         simHeat != null &&
@@ -720,13 +718,18 @@ export default function TacticalPage() {
                               )}
                               {sector && (
                                 <>
+                                  {/* Sector boundary outline (3x3 cell span) */}
                                   <div
-                                    className="pointer-events-none absolute z-10 border-[3px] border-cyan-400 opacity-70"
+                                    className="pointer-events-none absolute z-10 border-2 border-cyan-400/75 shadow-[0_0_10px_rgba(34,211,238,0.25)]"
                                     style={{ width: "300%", height: "300%", left: "-100%", top: "-100%" }}
                                   />
-                                  <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
-                                    <span className="rounded border border-cyan-400/80 bg-sky-950/90 px-1.5 py-0.5 text-center text-[9.5px] font-black uppercase leading-none tracking-widest text-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]">
+                                  {/* Sector label badge */}
+                                  <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center gap-0.5">
+                                    <span className="rounded border border-cyan-400/80 bg-sky-950/92 px-1.5 py-0.5 text-center text-[9px] font-black uppercase leading-none tracking-widest text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.4)]">
                                       {sector.id.replace("sector_", "SEC ")}
+                                    </span>
+                                    <span className="rounded bg-slate-950/80 px-1 py-px text-center text-[7px] font-semibold uppercase tracking-wider text-slate-400">
+                                      {sector.type}
                                     </span>
                                   </div>
                                 </>
@@ -922,92 +925,96 @@ export default function TacticalPage() {
           </button>
 
                 {/* Legend body */}
-                <div className={cn("overflow-hidden transition-all duration-300", legendOpen ? "max-h-[420px] pb-3" : "max-h-0")}>
+                <div className={cn("overflow-hidden transition-all duration-300", legendOpen ? "max-h-[520px] pb-3" : "max-h-0")}>
                   <div className="flex gap-5 px-3">
 
-                    {/* ── Drones ── */}
-                    <LegendCol title="Drones" items={[
-                      {
-                        icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("flying")} />,
-                        ring: "bg-cyan-400",
-                        label: "Active",
-                        desc: "On patrol / scan",
-                      },
-                      {
-                        icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("charging")} />,
-                        ring: "bg-emerald-400",
-                        label: "Charging",
-                        desc: "At power hub",
-                      },
-                      {
-                        icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("returning")} />,
-                        ring: "bg-amber-400",
-                        label: "Returning",
-                        desc: "En route home",
-                      },
-                      {
-                        icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("offline")} />,
-                        ring: "bg-slate-500",
-                        label: "Offline",
-                        desc: "Inactive",
-                      },
-                    ]} />
+                    {/* ══ 2D ISO view — Blocky 3-D sprites ══ */}
+                    {viewMode === "2d" && (
+                      <>
+                        <LegendCol title="Drones" items={[
+                          { icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("flying")} />,    ring: "bg-cyan-400",    label: "Active",    desc: "Patrol / scan" },
+                          { icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("charging")} />,  ring: "bg-emerald-400", label: "Charging",  desc: "At power hub" },
+                          { icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("returning")} />, ring: "bg-amber-400",   label: "Returning", desc: "En route home" },
+                          { icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("offline")} />,   ring: "bg-slate-500",   label: "Offline",   desc: "Inactive" },
+                        ]} />
+                        <div className="w-px self-stretch bg-slate-800/60" />
+                        <LegendCol title="Survivors" items={[
+                          { icon: <BlockySurvivorSprite shirt="#ef4444" className="h-6 w-6" />,         ring: "bg-red-400",     label: "Critical",   desc: "Needs rescue now" },
+                          { icon: <BlockySurvivorSprite shirt="#f97316" className="h-6 w-6" />,         ring: "bg-orange-400",  label: "Moderate",   desc: "Stable for now" },
+                          { icon: <BlockySurvivorSprite shirt="#22c55e" className="h-6 w-6" />,         ring: "bg-emerald-400", label: "Stable",     desc: "Low urgency" },
+                          { icon: <BlockySurvivorSprite shirt="#22d3ee" className="h-6 w-6" />,         ring: "bg-sky-400",     label: "Rescued",    desc: "Mission complete" },
+                          { icon: <BlockySurvivorSprite shirt="#475569" className="h-6 w-6" dimmed />,  ring: "bg-slate-600",   label: "Undetected", desc: "Not yet found" },
+                        ]} />
+                        <div className="w-px self-stretch bg-slate-800/60" />
+                        <LegendCol title="Infrastructure" items={[
+                          { icon: <BlockyChargingSprite className="h-6 w-6" />, ring: "bg-emerald-500", label: "Charging Station", desc: "Drone power hub" },
+                          { icon: <BlockyDepotSprite    className="h-6 w-6" />, ring: "bg-sky-400",     label: "Supply Depot",    desc: "Logistics node" },
+                        ]} />
+                      </>
+                    )}
 
-                    {/* separator */}
+                    {/* ══ Flat 2-D grid — Lucide icons (matches what's on the grid) ══ */}
+                    {viewMode === "flat" && (
+                      <>
+                        <LegendCol title="Drones" items={[
+                          { icon: <Triangle fill="currentColor" className="h-5 w-5 text-cyan-400" />,    ring: "bg-cyan-400",    label: "Active",    desc: "Patrol / scan" },
+                          { icon: <Triangle fill="currentColor" className="h-5 w-5 text-emerald-400" />, ring: "bg-emerald-400", label: "Charging",  desc: "At power hub" },
+                          { icon: <Triangle fill="currentColor" className="h-5 w-5 text-amber-400" />,   ring: "bg-amber-400",   label: "Returning", desc: "En route home" },
+                          { icon: <Triangle fill="currentColor" className="h-5 w-5 rotate-180 text-red-500" />, ring: "bg-red-500", label: "Offline", desc: "Inactive" },
+                        ]} />
+                        <div className="w-px self-stretch bg-slate-800/60" />
+                        <LegendCol title="Survivors" items={[
+                          { icon: <HeartPulse className="h-5 w-5 text-red-500" />,     ring: "bg-red-400",     label: "Critical",   desc: "Needs rescue now" },
+                          { icon: <HeartPulse className="h-5 w-5 text-amber-500" />,   ring: "bg-orange-400",  label: "Moderate",   desc: "Stable for now" },
+                          { icon: <HeartPulse className="h-5 w-5 text-emerald-500" />, ring: "bg-emerald-400", label: "Stable",     desc: "Low urgency" },
+                          { icon: <HeartPulse className="h-5 w-5 text-sky-300" />,     ring: "bg-sky-400",     label: "Rescued",    desc: "Mission complete" },
+                          { icon: <HeartPulse className="h-5 w-5 text-slate-500 opacity-60" />, ring: "bg-slate-600", label: "Undetected", desc: "Not yet found" },
+                        ]} />
+                        <div className="w-px self-stretch bg-slate-800/60" />
+                        <LegendCol title="Infrastructure" items={[
+                          { icon: <BatteryCharging className="h-5 w-5 text-emerald-400" />, ring: "bg-emerald-500", label: "Charging Station", desc: "Drone power hub" },
+                          { icon: <Package         className="h-5 w-5 text-sky-400" />,     ring: "bg-sky-400",     label: "Supply Depot",    desc: "Logistics node" },
+                        ]} />
+                      </>
+                    )}
+
+                    {/* ══ 3-D Mapbox — colored dots matching DeckGL marker colors ══ */}
+                    {viewMode === "3d" && (
+                      <>
+                        <LegendCol title="Drones" items={[
+                          { icon: <span className="inline-block h-4 w-4 rounded-[3px]" style={{ background: "rgb(61,158,228)" }} />,  ring: "bg-sky-400",     label: "Active",    desc: "Triangle pillar" },
+                          { icon: <span className="inline-block h-4 w-4 rounded-[3px]" style={{ background: "rgb(34,197,94)" }} />,   ring: "bg-emerald-400", label: "Charging",  desc: "Green pillar" },
+                          { icon: <span className="inline-block h-4 w-4 rounded-[3px]" style={{ background: "rgb(245,158,11)" }} />,  ring: "bg-amber-400",   label: "Returning", desc: "Amber pillar" },
+                          { icon: <span className="inline-block h-4 w-4 rounded-[3px]" style={{ background: "rgb(239,68,68)" }} />,   ring: "bg-red-400",     label: "Offline",   desc: "Red pillar" },
+                        ]} />
+                        <div className="w-px self-stretch bg-slate-800/60" />
+                        <LegendCol title="Survivors" items={[
+                          { icon: <HeartPulse className="h-5 w-5 text-red-500" />,     ring: "bg-red-400",     label: "Critical",   desc: "Pulsing halo" },
+                          { icon: <HeartPulse className="h-5 w-5 text-amber-500" />,   ring: "bg-orange-400",  label: "Moderate",   desc: "Amber icon" },
+                          { icon: <HeartPulse className="h-5 w-5 text-emerald-500" />, ring: "bg-emerald-400", label: "Stable",     desc: "Green icon" },
+                          { icon: <HeartPulse className="h-5 w-5 text-sky-300" />,     ring: "bg-sky-400",     label: "Rescued",    desc: "Sky icon" },
+                          { icon: <HeartPulse className="h-5 w-5 text-slate-400 opacity-60" />, ring: "bg-slate-600", label: "Undetected", desc: "Dimmed" },
+                        ]} />
+                        <div className="w-px self-stretch bg-slate-800/60" />
+                        <LegendCol title="Infrastructure" items={[
+                          { icon: <span className="inline-block h-4 w-4 rounded-[3px]" style={{ background: "rgb(34,197,94)" }} />,  ring: "bg-emerald-500", label: "Charging Station", desc: "Green hex column" },
+                          { icon: <span className="inline-block h-4 w-4 rounded-[3px]" style={{ background: "rgb(14,165,233)" }} />, ring: "bg-sky-400",     label: "Supply Depot",    desc: "Sky hex column" },
+                        ]} />
+                      </>
+                    )}
+
+                    {/* ══ Sectors (all views) — derived from TACTICAL_SECTORS ══ */}
                     <div className="w-px self-stretch bg-slate-800/60" />
-
-                    {/* ── Survivors ── */}
-                    <LegendCol title="Survivors" items={[
-                      {
-                        icon: <BlockySurvivorSprite shirt="#ef4444" className="h-6 w-6" />,
-                        ring: "bg-red-400",
-                        label: "Critical",
-                        desc: "Needs rescue now",
-                      },
-                      {
-                        icon: <BlockySurvivorSprite shirt="#f97316" className="h-6 w-6" />,
-                        ring: "bg-orange-400",
-                        label: "Moderate",
-                        desc: "Stable for now",
-                      },
-                      {
-                        icon: <BlockySurvivorSprite shirt="#22c55e" className="h-6 w-6" />,
-                        ring: "bg-emerald-400",
-                        label: "Stable",
-                        desc: "Low urgency",
-                      },
-                      {
-                        icon: <BlockySurvivorSprite shirt="#22d3ee" className="h-6 w-6" />,
-                        ring: "bg-sky-400",
-                        label: "Rescued",
-                        desc: "Mission complete",
-                      },
-                      {
-                        icon: <BlockySurvivorSprite shirt="#475569" className="h-6 w-6" dimmed />,
-                        ring: "bg-slate-600",
-                        label: "Undetected",
-                        desc: "Not yet found",
-                      },
-                    ]} />
-
-                    {/* separator */}
-                    <div className="w-px self-stretch bg-slate-800/60" />
-
-                    {/* ── Infrastructure ── */}
-                    <LegendCol title="Infrastructure" items={[
-                      {
-                        icon: <BlockyChargingSprite className="h-6 w-6" />,
-                        ring: "bg-emerald-500",
-                        label: "Charging Station",
-                        desc: "Drone power hub",
-                      },
-                      {
-                        icon: <BlockyDepotSprite className="h-6 w-6" />,
-                        ring: "bg-sky-400",
-                        label: "Supply Depot",
-                        desc: "Logistics node",
-                      },
-                    ]} />
+                    <LegendCol title="Sectors" items={TACTICAL_SECTORS.map((s) => ({
+                      icon: (
+                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm border border-cyan-400/80 bg-sky-950/80 text-[6px] font-black text-cyan-400">
+                          {s.id.replace("SEC-", "")}
+                        </span>
+                      ),
+                      ring: "bg-cyan-500/40",
+                      label: `${s.id} · ${s.type}`,
+                      desc: `Grid (${s.x}, ${s.y})`,
+                    }))} />
 
                   </div>
                 </div>
@@ -1180,6 +1187,117 @@ export default function TacticalPage() {
                 <QuickCommands disabled={isCmdActive} onEventAction={handleEventAction} />
               </div>
             </div>
+
+            {/* Sensor Telemetry — live fusion readout */}
+            {(() => {
+              const detected = survivors.filter(s => s.detected && !s.rescued);
+              const COND_RGB: Record<string, [number, number, number]> = {
+                critical: [0.82, 0.18, 0.14],
+                moderate: [0.74, 0.55, 0.32],
+                stable:   [0.52, 0.68, 0.78],
+              };
+              const heatFor = (c: string) =>
+                c === "critical" ? 85 : c === "moderate" ? 63 : 41;
+              const fusedFor = (c: string) =>
+                c === "critical" ? 91 : c === "moderate" ? 74 : 58;
+              return (
+                <div className="space-y-3 border-t border-slate-800/50 pt-5">
+                  <SectionLabel icon={<Thermometer className="h-3 w-3 text-amber-400" />}>
+                    Sensor Telemetry
+                  </SectionLabel>
+                  <div className="space-y-2">
+                    {detected.length === 0 && (
+                      <div className="rounded-lg border border-slate-800/40 bg-slate-900/30 px-3 py-4 text-center">
+                        <Thermometer className="mx-auto mb-1.5 h-4 w-4 text-slate-700" />
+                        <p className="font-mono text-[9px] uppercase tracking-widest text-slate-700">No thermal detections yet</p>
+                        <p className="mt-0.5 font-mono text-[8px] text-slate-800">Run a scan mission to populate</p>
+                      </div>
+                    )}
+                    {detected.slice(0, 5).map((sv) => {
+                      const heat = heatFor(sv.condition);
+                      const fused = fusedFor(sv.condition);
+                      const rgb = COND_RGB[sv.condition] ?? COND_RGB.stable;
+                      const condCol =
+                        sv.condition === "critical" ? "text-red-400 border-red-800/50 bg-red-950/40" :
+                        sv.condition === "moderate"  ? "text-amber-400 border-amber-800/50 bg-amber-950/40" :
+                                                       "text-emerald-400 border-emerald-800/50 bg-emerald-950/40";
+                      const heatBarCol =
+                        sv.condition === "critical" ? "bg-red-500" :
+                        sv.condition === "moderate"  ? "bg-amber-500" : "bg-emerald-500";
+                      return (
+                        <div key={sv.survivor_id} className="rounded-lg border border-slate-800/50 bg-slate-900/50 p-2.5 space-y-2">
+                          {/* Row 1: ID + condition + fused score */}
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="font-mono text-[9px] text-slate-400 truncate">
+                              {sv.survivor_id.replace("SURVIVOR_", "SV-")}
+                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className={cn("rounded border px-1.5 py-px text-[8px] font-bold uppercase tracking-widest", condCol)}>
+                                {sv.condition}
+                              </span>
+                              <span className="font-mono text-[9px] font-bold text-cyan-300">
+                                {fused}%
+                              </span>
+                            </div>
+                          </div>
+                          {/* Row 2: Thermal heat bar */}
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-1 font-mono text-[8px] text-slate-600">
+                                <Thermometer className="h-2.5 w-2.5 text-amber-500" />
+                                IR HEAT
+                              </span>
+                              <span className="font-mono text-[8px] text-amber-400">{heat}°</span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-slate-800">
+                              <div
+                                className={cn("h-full rounded-full transition-all duration-700", heatBarCol)}
+                                style={{ width: `${heat}%` }}
+                              />
+                            </div>
+                          </div>
+                          {/* Row 3: RGB channel bars */}
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1 font-mono text-[8px] text-slate-600 mb-1">
+                              <ScanLine className="h-2.5 w-2.5 text-cyan-500" />
+                              RGB SPECTRAL
+                            </div>
+                            <div className="flex gap-0.5 items-end h-5">
+                              {([["R", rgb[0], "#ef4444"], ["G", rgb[1], "#22c55e"], ["B", rgb[2], "#3b82f6"]] as [string, number, string][]).map(([ch, val, color]) => (
+                                <div key={ch} className="flex-1 flex flex-col items-center gap-0.5">
+                                  <div className="w-full rounded-sm" style={{ height: `${Math.round(val * 18)}px`, background: color, opacity: 0.8 }} />
+                                  <span className="font-mono text-[7px] text-slate-600">{ch}</span>
+                                </div>
+                              ))}
+                              {/* RGB swatch */}
+                              <div
+                                className="ml-1 w-5 h-5 rounded border border-slate-700/50 shrink-0"
+                                style={{ background: `rgb(${Math.round(rgb[0]*255)},${Math.round(rgb[1]*255)},${Math.round(rgb[2]*255)})` }}
+                                title="Spectral signature"
+                              />
+                            </div>
+                          </div>
+                          {/* Row 4: Detection modalities */}
+                          <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-800/50">
+                            <span className="font-mono text-[7px] uppercase tracking-widest text-slate-700">via</span>
+                            {["thermal_ir", "rgb_camera", "blob_detect"].map((mod) => (
+                              <span key={mod} className="rounded border border-slate-700/40 bg-slate-800/40 px-1 py-px font-mono text-[7px] uppercase tracking-wider text-slate-500">
+                                {mod.replace("_", " ")}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {detected.length > 5 && (
+                    <p className="text-center font-mono text-[8px] text-slate-600 uppercase tracking-widest">
+                      +{detected.length - 5} more targets
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Left panel footer */}
             <div className="mt-auto flex shrink-0 items-center justify-between border-t border-slate-800/50 pt-3 text-[8px] uppercase tracking-widest text-slate-700">

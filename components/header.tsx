@@ -225,29 +225,6 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Sub-breadcrumb bar — shows current section context */}
-        <div className="hidden border-b border-slate-800/40 bg-slate-950/70 px-6 py-1.5 md:block">
-          <div className="mx-auto flex max-w-[1800px] items-center gap-1.5">
-            {NAV_ITEMS.map((item, i) => {
-              const active = isActive(item.href);
-              if (!active) return null;
-              return (
-                <div key={item.href} className="flex items-center gap-1.5">
-                  <item.icon className="h-3 w-3 text-cyan-400" />
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-400">
-                    {item.label}
-                  </span>
-                  <span className="text-[10px] text-slate-600">
-                    {item.href === "/" ? "· Fleet Intelligence · Live World Stream" :
-                     item.href === "/tactical" ? "· Operational Field View · ISO Grid" :
-                     item.href === "/fleet" ? "· Drone Asset Management" :
-                     "· Agent-Based Modelling"}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </header>
 
       {/* ═══════════════════════  MOBILE DRAWER  ═══════════════════════ */}

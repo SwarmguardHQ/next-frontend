@@ -12,6 +12,39 @@ import {
 import { useRouter } from "next/navigation";
 import { getMeta, isFlying, buildDroneMesh, attachDefaultSensors, generateTelemetry, SensorIcon } from "../shared";
 
+// ─── Thermal color palette (heat 0–100 → RGB) ────────────────────────────────
+function thermalColor(heat: number): [number, number, number] {
+    const h = Math.max(0, Math.min(100, heat));
+    const stops: [number, [number, number, number]][] = [
+        [0,   [4,   6,   22]],
+        [12,  [0,   0,   110]],
+        [28,  [0,   60,  200]],
+        [44,  [0,   200, 220]],
+        [58,  [80,  255, 40]],
+        [68,  [255, 255, 0]],
+        [78,  [255, 120, 0]],
+        [88,  [255, 28,  0]],
+        [100, [255, 255, 255]],
+    ];
+    let i = 0;
+    while (i < stops.length - 2 && stops[i + 1][0] <= h) i++;
+    const [h0, c0] = stops[i];
+    const [h1, c1] = stops[i + 1];
+    const t = (h - h0) / Math.max(1, h1 - h0);
+    return [
+        Math.round(c0[0] + (c1[0] - c0[0]) * t),
+        Math.round(c0[1] + (c1[1] - c0[1]) * t),
+        Math.round(c0[2] + (c1[2] - c0[2]) * t),
+    ];
+}
+
+// ─── Spectral signature per condition (matches backend sensor model) ──────────
+const CONDITION_RGB: Record<string, [number, number, number]> = {
+    critical: [0.82, 0.18, 0.14],
+    moderate: [0.74, 0.55, 0.32],
+    stable:   [0.52, 0.68, 0.78],
+};
+
 // ─── Camera feed panel ────────────────────────────────────────────────────────
 
 function CameraFeed({ drone, telemetry }: { drone: Drone; telemetry: ReturnType<typeof generateTelemetry> }) {
@@ -19,14 +52,123 @@ function CameraFeed({ drone, telemetry }: { drone: Drone; telemetry: ReturnType<
     const offline = drone.status === "offline";
     const [viewMode, setViewMode] = useState<"optical" | "thermal">("optical");
     const videoSrc = drone.drone_id === "DRONE_BRAVO" ? "/drone-feed2.mp4" : "/drone-feed1.mp4";
-    const thermalSrc = "";
+
+    // Real thermal canvas
+    const thermalCanvasRef = useRef<HTMLCanvasElement>(null);
+    const { survivorData } = useWorldStream({ intervalMs: 1500 });
+
+    useEffect(() => {
+        if (viewMode !== "thermal") return;
+        const canvas = thermalCanvasRef.current;
+        if (!canvas) return;
+
+        const draw = () => {
+            const parent = canvas.parentElement;
+            const W = parent?.clientWidth || 400;
+            const H = parent?.clientHeight || 220;
+            if (canvas.width !== W || canvas.height !== H) {
+                canvas.width = W;
+                canvas.height = H;
+            }
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return;
+
+            const GRID = 20;
+            const survivors = survivorData?.survivors ?? [];
+
+            // Build Gaussian heat grid from survivor positions
+            const heatGrid = new Float32Array(GRID * GRID).fill(10);
+            for (const sv of survivors) {
+                if (sv.rescued) continue;
+                const peak = sv.condition === "critical" ? 88 : sv.condition === "moderate" ? 66 : 44;
+                for (let dy = -5; dy <= 5; dy++) {
+                    for (let dx = -5; dx <= 5; dx++) {
+                        const gx = Math.round(sv.position.x + dx);
+                        const gy = Math.round(sv.position.y + dy);
+                        if (gx < 0 || gx >= GRID || gy < 0 || gy >= GRID) continue;
+                        const h = peak * Math.exp(-(dx * dx + dy * dy) / (2 * 2.8 * 2.8));
+                        const idx = gy * GRID + gx;
+                        if (h > heatGrid[idx]) heatGrid[idx] = h;
+                    }
+                }
+            }
+
+            const cW = W / GRID;
+            const cH = H / GRID;
+
+            // Draw cells
+            for (let gy = 0; gy < GRID; gy++) {
+                for (let gx = 0; gx < GRID; gx++) {
+                    const [r, g, b] = thermalColor(heatGrid[gy * GRID + gx]);
+                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                    ctx.fillRect(gx * cW, gy * cH, cW + 1, cH + 1);
+                }
+            }
+
+            // Blob detection circles around detected survivors
+            for (const sv of survivors) {
+                if (!sv.detected || sv.rescued) continue;
+                const px = (sv.position.x + 0.5) * cW;
+                const py = (sv.position.y + 0.5) * cH;
+                // Outer blob ring
+                ctx.strokeStyle = "rgba(255, 240, 60, 0.85)";
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(px, py, (cW + cH) / 2 * 1.6, 0, Math.PI * 2);
+                ctx.stroke();
+                // Inner hot spot
+                ctx.strokeStyle = "rgba(255,255,255,0.7)";
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(px, py, (cW + cH) / 2 * 0.6, 0, Math.PI * 2);
+                ctx.stroke();
+                // Condition label
+                const condLabel = sv.condition === "critical" ? "CRIT" : sv.condition === "moderate" ? "MOD" : "STB";
+                ctx.font = `bold ${Math.round(cW * 0.55)}px monospace`;
+                ctx.fillStyle = "rgba(255,255,100,0.95)";
+                ctx.textAlign = "center";
+                ctx.fillText(condLabel, px, py - (cW + cH) / 2 * 1.9);
+            }
+
+            // Drone crosshair
+            const dpx = (drone.position.x + 0.5) * cW;
+            const dpy = (drone.position.y + 0.5) * cH;
+            ctx.strokeStyle = "rgba(0, 255, 128, 0.9)";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(dpx - cW * 1.2, dpy); ctx.lineTo(dpx + cW * 1.2, dpy);
+            ctx.moveTo(dpx, dpy - cH * 1.2); ctx.lineTo(dpx, dpy + cH * 1.2);
+            ctx.stroke();
+            // Scan radius (THERMAL_SCAN_RADIUS ≈ 3 cells)
+            ctx.strokeStyle = "rgba(0, 255, 128, 0.3)";
+            ctx.setLineDash([3, 3]);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(dpx, dpy, 3 * (cW + cH) / 2, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        };
+
+        draw();
+        const id = window.setInterval(draw, 1600);
+        return () => window.clearInterval(id);
+    }, [viewMode, flying, survivorData, drone.position]);
+
+    // Nearby detected survivors for RGB panel (within 6 cells)
+    const nearbyDetected = (survivorData?.survivors ?? []).filter(sv => {
+        if (!sv.detected || sv.rescued) return false;
+        const dx = sv.position.x - drone.position.x;
+        const dy = sv.position.y - drone.position.y;
+        return Math.sqrt(dx * dx + dy * dy) <= 6;
+    });
 
     return (
-        <div className="relative w-full h-full bg-slate-900 overflow-hidden rounded-xl border border-slate-800">
+        <div className="flex flex-col w-full h-full bg-slate-900 overflow-hidden rounded-xl border border-slate-800">
+        <div className="relative flex-1 overflow-hidden">
             {/* Header HUD */}
             <div className="absolute top-0 inset-x-0 z-20 flex justify-between items-center px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
                 <span className="font-mono text-xs text-green-400 flex items-center gap-2 drop-shadow-md">
-                    <Eye className="h-3.5 w-3.5" /> {viewMode === "thermal" ? "THERMAL CAMERA" : "OPTICAL CAMERA"} — {drone.drone_id}
+                    <Eye className="h-3.5 w-3.5" /> {viewMode === "thermal" ? "THERMAL IR · BLOB DETECT" : "OPTICAL RGB CAMERA"} — {drone.drone_id}
                 </span>
                 <span className="font-mono text-xs bg-black/50 px-2 py-1 rounded text-green-400 flex items-center gap-1.5">
                     REC <span className={cn("inline-block w-2 h-2 rounded-full", flying ? "bg-red-500 animate-pulse" : "bg-slate-600")} />
@@ -49,40 +191,55 @@ function CameraFeed({ drone, telemetry }: { drone: Drone; telemetry: ReturnType<
                 </button>
             </div>
 
-						{/* Logic control for showing camera view */}
+	            {/* Camera / Thermal view */}
             {offline ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-600 font-mono">
                     <WifiOff className="h-10 w-10" /> NO SIGNAL — UPLINK LOST
                 </div>
-            ) : flying ? (
+            ) : (
                 <>
                 <div className="absolute inset-0 flex divide-x divide-green-500/20">
-                    {(viewMode === "optical") && (
-                        <div className="relative flex-1 bg-black overflow-hidden relative group">
-                            <span className="absolute top-12 left-4 z-30 font-mono text-[10px] text-green-400 bg-black/60 px-2 py-1 flex items-center gap-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                OPTICAL VIS
-                            </span>
-                            <video key={`vis-${videoSrc}`} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover grayscale contrast-125">
-                                <source src={videoSrc} type="video/mp4" />
-                            </video>
-                        </div>
-                    )}
-                    {(viewMode === "thermal") && (
-                        <div className="relative flex-1 bg-black overflow-hidden relative group">
-                            <span className="absolute top-12 left-4 z-30 font-mono text-[10px] text-amber-500 bg-black/60 px-2 py-1 flex items-center gap-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                THERMAL IR
-                            </span>
-                            {thermalSrc ? (
-                                <video key={`ir-${thermalSrc}`} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover grayscale-[50%] sepia contrast-150 saturate-150 hue-rotate-15">
-                                    <source src={thermalSrc} type="video/mp4" />
+                    {/* Optical: only shows live video when flying */}
+                    {viewMode === "optical" && (
+                        flying ? (
+                            <div className="relative flex-1 bg-black overflow-hidden group">
+                                <span className="absolute top-12 left-4 z-30 font-mono text-[10px] text-green-400 bg-black/60 px-2 py-1 flex items-center gap-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                    OPTICAL VIS
+                                </span>
+                                <video key={`vis-${videoSrc}`} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover grayscale contrast-125">
+                                    <source src={videoSrc} type="video/mp4" />
                                 </video>
-                            ) : (
-                                <div className="absolute inset-0 flex items-center justify-center font-mono text-xs text-amber-500/50">
-                                    <Wind className="h-6 w-6 animate-pulse" />
+                            </div>
+                        ) : (
+                            <div className="relative flex-1 bg-slate-950 flex flex-col items-center justify-center gap-2 font-mono text-slate-500 text-xs">
+                                <Activity className="h-7 w-7 opacity-40" />
+                                <span className="uppercase tracking-widest text-[10px]">OPTICS STANDBY</span>
+                                <span className="text-[9px] text-slate-700 uppercase tracking-wide">{drone.status} — RGB ready on takeoff</span>
+                            </div>
+                        )
+                    )}
+                    {/* Thermal: always visible — draws heatmap from world survivors */}
+                    {viewMode === "thermal" && (
+                        <div className="relative flex-1 bg-black overflow-hidden group">
+                            <canvas
+                                ref={thermalCanvasRef}
+                                className="absolute inset-0 w-full h-full"
+                            />
+                            {/* Palette legend */}
+                            <div className="absolute bottom-3 right-3 z-20 flex flex-col gap-0.5 font-mono text-[8px] pointer-events-none">
+                                {[["≥88°", "#ff1c00"], ["70°", "#ff7800"], ["55°", "#ffff00"], ["40°", "#00c8dc"], ["≤15°", "#00006e"]].map(([label, color]) => (
+                                    <div key={label} className="flex items-center gap-1.5">
+                                        <div className="h-2 w-4 rounded-sm" style={{ background: color }} />
+                                        <span className="text-slate-300">{label}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            {/* No-survivors placeholder */}
+                            {(survivorData?.survivors ?? []).filter(s => !s.rescued).length === 0 && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 font-mono text-amber-900/60 pointer-events-none">
+                                    <span className="text-[10px] uppercase tracking-widest">Scanning… no heat signatures</span>
                                 </div>
                             )}
-                            {/* Fake thermal overlay gradient mapping */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-red-900/20 via-transparent to-amber-900/10 mix-blend-overlay pointer-events-none" />
                         </div>
                     )}
 
@@ -92,8 +249,8 @@ function CameraFeed({ drone, telemetry }: { drone: Drone; telemetry: ReturnType<
                     <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
                         <div className="relative w-16 h-16 border-2 border-green-500/50 rounded-full flex items-center justify-center">
                             <div className="w-1 h-1 bg-green-400 rounded-full animate-ping" />
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-[1px] bg-green-500/50" />
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-24 w-[1px] bg-green-500/50" />
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-px bg-green-500/50" />
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-24 w-px bg-green-500/50" />
                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 border border-green-500/10">
                                 {["-top-1 -left-1 border-t-[3px] border-l-[3px]", "-top-1 -right-1 border-t-[3px] border-r-[3px]",
                                     "-bottom-1 -left-1 border-b-[3px] border-l-[3px]", "-bottom-1 -right-1 border-b-[3px] border-r-[3px]"].map((cls, i) => (
@@ -103,23 +260,70 @@ function CameraFeed({ drone, telemetry }: { drone: Drone; telemetry: ReturnType<
                         </div>
                     </div>
                 </div>
-                    {/* Bottom HUD */}
-                    <div className="absolute bottom-3 left-3 z-20 font-mono text-[10px] text-green-400 bg-black/60 px-2 py-1.5 rounded backdrop-blur-sm space-y-0.5">
-                        <div>LAT: {drone.position.y.toFixed(5)}</div>
-                        <div>LNG: {drone.position.x.toFixed(5)}</div>
-                        <div>ALT: <span className="text-white">{telemetry.altitude}m</span></div>
-                    </div>
-                    <div className="absolute bottom-3 right-3 z-20 font-mono text-[10px] text-green-400 text-right bg-black/60 px-2 py-1.5 rounded backdrop-blur-sm space-y-0.5">
-                        <div>SPD: {telemetry.speed}km/h</div>
-                        <div>BAT: {drone.battery}%</div>
-                        <div>VSYNC: {telemetry.rpm1}</div>
-                    </div>
-                </>
-            ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-500 font-mono text-sm">
-                    <Activity className="h-10 w-10 opacity-50" /> OPTICS ENGAGED — GROUND MODE
+                {/* Bottom HUD */}
+                <div className="absolute bottom-3 left-3 z-20 font-mono text-[10px] text-green-400 bg-black/60 px-2 py-1.5 rounded backdrop-blur-sm space-y-0.5">
+                    <div>LAT: {drone.position.y.toFixed(5)}</div>
+                    <div>LNG: {drone.position.x.toFixed(5)}</div>
+                    <div>ALT: <span className="text-white">{flying ? `${telemetry.altitude}m` : "0m"}</span></div>
                 </div>
+                <div className="absolute bottom-3 right-3 z-20 font-mono text-[10px] text-green-400 text-right bg-black/60 px-2 py-1.5 rounded backdrop-blur-sm space-y-0.5">
+                    <div>SPD: {flying ? `${telemetry.speed}km/h` : "0 km/h"}</div>
+                    <div>BAT: {drone.battery}%</div>
+                    <div>VSYNC: {flying ? telemetry.rpm1 : "—"}</div>
+                </div>
+                </>
             )}
+        </div>
+
+        {/* RGB Spectral Readout — always visible in optical mode */}
+        {viewMode === "optical" && (
+            <div className="shrink-0 border-t border-slate-800 bg-slate-950/95 px-3 py-2 space-y-1.5">
+                <div className="flex items-center justify-between mb-1">
+                    <span className="font-mono text-[9px] uppercase tracking-widest text-green-400">RGB Spectral Signatures</span>
+                    <span className="font-mono text-[8px] text-slate-600">
+                        {nearbyDetected.length > 0 ? `${nearbyDetected.length} target${nearbyDetected.length > 1 ? "s" : ""} in FOV` : "Awaiting detections"}
+                    </span>
+                </div>
+                {nearbyDetected.length === 0 ? (
+                    <div className="flex items-center gap-2 py-1">
+                        <div className="flex gap-0.5 items-end h-4">
+                            {[["R", 0.15, "#ef4444"], ["G", 0.12, "#22c55e"], ["B", 0.18, "#3b82f6"]].map(([ch, val, color]) => (
+                                <div key={String(ch)} className="flex-1 flex flex-col items-center gap-0.5 w-6">
+                                    <div className="w-full rounded-sm opacity-20" style={{ height: `${Math.round(Number(val) * 18)}px`, background: String(color) }} />
+                                    <span className="font-mono text-[7px] text-slate-700">{ch}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <span className="font-mono text-[8px] text-slate-700 italic">No survivors in camera FOV — run a scan mission</span>
+                    </div>
+                ) : nearbyDetected.slice(0, 3).map((sv) => {
+                    const [r, g, b] = CONDITION_RGB[sv.condition] ?? CONDITION_RGB.stable;
+                    const condColor = sv.condition === "critical" ? "text-red-400" : sv.condition === "moderate" ? "text-amber-400" : "text-emerald-400";
+                    return (
+                        <div key={sv.survivor_id} className="space-y-0.5">
+                            <div className="flex items-center justify-between">
+                                <span className="font-mono text-[8px] text-slate-400">{sv.survivor_id.replace("SURVIVOR_", "SV-")}</span>
+                                <span className={cn("font-mono text-[8px] uppercase font-bold", condColor)}>{sv.condition}</span>
+                            </div>
+                            <div className="flex gap-0.5 items-center h-2.5">
+                                {([["R", r, "#ef4444"], ["G", g, "#22c55e"], ["B", b, "#3b82f6"]] as [string, number, string][]).map(([ch, val, color]) => (
+                                    <div key={ch} className="flex items-center gap-0.5 flex-1">
+                                        <span className="font-mono text-[7px] text-slate-600 w-2">{ch}</span>
+                                        <div className="flex-1 h-1.5 rounded-full bg-slate-800">
+                                            <div
+                                                className="h-full rounded-full transition-all duration-700"
+                                                style={{ width: `${Math.round(val * 100)}%`, background: color, opacity: 0.85 }}
+                                            />
+                                        </div>
+                                        <span className="font-mono text-[7px] text-slate-500 w-5 text-right">{Math.round(val * 100)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        )}
         </div>
     );
 }

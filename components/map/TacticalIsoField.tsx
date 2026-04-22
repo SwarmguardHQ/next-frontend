@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, RoundedBox } from "@react-three/drei";
+import { OrbitControls, RoundedBox, Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Drone, Survivor } from "@/types/api_types";
@@ -22,6 +22,7 @@ import {
   SLAB_H,
 } from "@/lib/tacticalIsoMath";
 import { cn } from "@/lib/utils";
+import { TACTICAL_SECTORS, type TacticalSector } from "@/lib/tacticalSectors";
 
 // module-level temp vector (avoids per-frame allocation)
 const _tv3 = new THREE.Vector3();
@@ -35,6 +36,7 @@ const MIN_POLAR = (42 * Math.PI) / 180;
 const MAX_POLAR = (72 * Math.PI) / 180;
 const DEF_POLAR = (60 * Math.PI) / 180;   // ← classic 30° elevation isometric
 const TILE_COLORS = ["#16223a", "#1a2840", "#1c2d48", "#19253e"] as const;
+
 
 // ─── exported types ───────────────────────────────────────────────────────────
 export type MapInfraItem = { id: string; x: number; y: number };
@@ -89,8 +91,8 @@ const MM = 148; // minimap canvas physical pixels (CSS: 148px)
 
 function MinimapLegend({ color, label, sq }: { color: string; label: string; sq?: boolean }) {
   return (
-    <span className="flex items-center gap-1 text-[8px] font-semibold text-slate-400">
-      <span className={cn("inline-block h-[7px] w-[7px]", sq ? "rounded-none" : "rounded-full", color)} />
+    <span className="flex items-center gap-1.5 text-[8px] font-semibold text-slate-400">
+      <span className={cn("inline-block h-[7px] w-[7px] shrink-0", sq ? "rounded-sm" : "rounded-full", color)} />
       {label}
     </span>
   );
@@ -189,11 +191,13 @@ function MinimapPanel({
           </div>
         )}
       </div>
-      <div className="flex items-center gap-3 bg-black/50 px-2.5 py-1.5">
-        <MinimapLegend color="bg-emerald-400" label="G" />
-        <MinimapLegend color="bg-red-400"     label="R" />
-        <MinimapLegend color="bg-orange-400"  label="M" />
-        <MinimapLegend color="bg-sky-400"     label="D" sq />
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-black/50 px-2.5 py-2">
+        <MinimapLegend color="bg-red-400"     label="Critical" />
+        <MinimapLegend color="bg-orange-400"  label="Moderate" />
+        <MinimapLegend color="bg-emerald-400" label="Stable" />
+        <MinimapLegend color="bg-sky-400"     label="Rescued" />
+        <MinimapLegend color="bg-slate-500"   label="Undetected" />
+        <MinimapLegend color="bg-sky-400"     label="Drone" sq />
       </div>
     </div>
   );
@@ -319,6 +323,259 @@ function HoverRing({ ix, iy }: { ix: number; iy: number }) {
   }, [ix, iy]);
   useEffect(() => () => { obj.geometry.dispose(); (obj.material as THREE.Material).dispose(); }, [obj]);
   return <primitive object={obj} />;
+}
+
+// ─── sector zone — colored outline + corner ticks ────────────────────────────
+function SectorZoneRing({ sx, sy, color }: { sx: number; sy: number; color: string }) {
+  const obj = useMemo(() => {
+    const elev = SLAB_H + 0.022;
+    const pts = [
+      mapToWorldVec(sx - 1, sy - 1, elev),
+      mapToWorldVec(sx + 2, sy - 1, elev),
+      mapToWorldVec(sx + 2, sy + 2, elev),
+      mapToWorldVec(sx - 1, sy + 2, elev),
+    ];
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.75 });
+    return new THREE.LineLoop(geo, mat);
+  }, [sx, sy, color]);
+  useEffect(() => () => { obj.geometry.dispose(); (obj.material as THREE.Material).dispose(); }, [obj]);
+  return <primitive object={obj} />;
+}
+
+function SectorCornerTicks({ sx, sy, color }: { sx: number; sy: number; color: string }) {
+  const obj = useMemo(() => {
+    const elev = SLAB_H + 0.023;
+    const tickLen = 0.32;
+    const corners: [number, number][] = [
+      [sx - 1, sy - 1], [sx + 2, sy - 1], [sx + 2, sy + 2], [sx - 1, sy + 2],
+    ];
+    const pts: THREE.Vector3[] = [];
+    for (const [cx, cy] of corners) {
+      const dx = cx < sx + 0.5 ? 1 : -1;
+      const dz = cy < sy + 0.5 ? 1 : -1;
+      const base = mapToWorldVec(cx, cy, elev);
+      pts.push(mapToWorldVec(cx + dx * tickLen, cy, elev), base, base, mapToWorldVec(cx, cy + dz * tickLen, elev));
+    }
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 1.0 });
+    return new THREE.LineSegments(geo, mat);
+  }, [sx, sy, color]);
+  useEffect(() => () => { obj.geometry.dispose(); (obj.material as THREE.Material).dispose(); }, [obj]);
+  return <primitive object={obj} />;
+}
+
+// ─── per-sector landmark buildings ───────────────────────────────────────────
+
+/** School — main block + flagpole + flag */
+function SchoolBuilding({ p, color }: { p: THREE.Vector3; color: string }) {
+  return (
+    <group position={[p.x, SLAB_H, p.z]}>
+      {/* Main building */}
+      <RoundedBox args={[0.56, 0.38, 0.56]} radius={0.04} smoothness={4} position={[0, 0.19, 0]} castShadow receiveShadow>
+        <meshStandardMaterial color="#1c2e1a" roughness={0.65} metalness={0.10} />
+      </RoundedBox>
+      {/* Roof strip */}
+      <mesh position={[0, 0.395, 0]} castShadow>
+        <boxGeometry args={[0.58, 0.022, 0.58]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.55} roughness={0.4} />
+      </mesh>
+      {/* Windows row */}
+      {[-0.14, 0, 0.14].map((ox, i) => (
+        <mesh key={i} position={[ox, 0.20, 0.285]}>
+          <boxGeometry args={[0.08, 0.10, 0.008]} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.9} roughness={0.2} />
+        </mesh>
+      ))}
+      {/* Flagpole */}
+      <mesh position={[0.22, 0.38 + 0.20, 0.22]} castShadow>
+        <cylinderGeometry args={[0.010, 0.010, 0.40, 5]} />
+        <meshStandardMaterial color="#94a3b8" metalness={0.85} roughness={0.15} />
+      </mesh>
+      {/* Flag */}
+      <mesh position={[0.22 + 0.075, 0.38 + 0.355, 0.22]}>
+        <planeGeometry args={[0.15, 0.10]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.8} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Industrial — factory block + two chimneys with emissive tops */
+function IndustrialBuilding({ p, color }: { p: THREE.Vector3; color: string }) {
+  return (
+    <group position={[p.x, SLAB_H, p.z]}>
+      {/* Main shed */}
+      <mesh position={[0, 0.22, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.68, 0.44, 0.52]} />
+        <meshStandardMaterial color="#1a1a1a" roughness={0.80} metalness={0.30} />
+      </mesh>
+      {/* Roof ridge */}
+      <mesh position={[0, 0.455, 0]}>
+        <boxGeometry args={[0.70, 0.030, 0.54]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.45} roughness={0.5} />
+      </mesh>
+      {/* Chimney 1 */}
+      <mesh position={[-0.18, 0.44 + 0.22, 0.08]} castShadow>
+        <cylinderGeometry args={[0.050, 0.055, 0.44, 8]} />
+        <meshStandardMaterial color="#2a2a2a" roughness={0.7} metalness={0.4} />
+      </mesh>
+      <mesh position={[-0.18, 0.44 + 0.45, 0.08]}>
+        <cylinderGeometry args={[0.062, 0.050, 0.06, 8]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} roughness={0.2} />
+      </mesh>
+      {/* Chimney 2 */}
+      <mesh position={[0.18, 0.44 + 0.18, 0.08]} castShadow>
+        <cylinderGeometry args={[0.042, 0.048, 0.36, 8]} />
+        <meshStandardMaterial color="#2a2a2a" roughness={0.7} metalness={0.4} />
+      </mesh>
+      <mesh position={[0.18, 0.44 + 0.37, 0.08]}>
+        <cylinderGeometry args={[0.054, 0.042, 0.05, 8]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} roughness={0.2} />
+      </mesh>
+      {/* Side door */}
+      <mesh position={[0, 0.12, 0.262]}>
+        <boxGeometry args={[0.12, 0.22, 0.008]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} roughness={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Residential — two-storey house + pitched roof + glowing window */
+function ResidentialBuilding({ p, color }: { p: THREE.Vector3; color: string }) {
+  return (
+    <group position={[p.x, SLAB_H, p.z]}>
+      {/* Walls */}
+      <RoundedBox args={[0.52, 0.36, 0.44]} radius={0.03} smoothness={3} position={[0, 0.18, 0]} castShadow receiveShadow>
+        <meshStandardMaterial color="#2d3b2b" roughness={0.70} metalness={0.08} />
+      </RoundedBox>
+      {/* Roof (triangular prism via scaled box) */}
+      <mesh position={[0, 0.415, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
+        <coneGeometry args={[0.40, 0.22, 4]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.40} roughness={0.55} />
+      </mesh>
+      {/* Front door */}
+      <mesh position={[0, 0.10, 0.222]}>
+        <boxGeometry args={[0.10, 0.18, 0.008]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.6} roughness={0.35} />
+      </mesh>
+      {/* Windows */}
+      <mesh position={[-0.14, 0.22, 0.222]}>
+        <boxGeometry args={[0.09, 0.09, 0.008]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.0} roughness={0.2} />
+      </mesh>
+      <mesh position={[0.14, 0.22, 0.222]}>
+        <boxGeometry args={[0.09, 0.09, 0.008]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.0} roughness={0.2} />
+      </mesh>
+      {/* Garden post */}
+      <mesh position={[0.30, 0.10, 0.10]}>
+        <cylinderGeometry args={[0.012, 0.012, 0.20, 5]} />
+        <meshStandardMaterial color="#94a3b8" metalness={0.7} roughness={0.3} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Commercial — tall office tower + glowing windows grid + antenna */
+function CommercialBuilding({ p, color }: { p: THREE.Vector3; color: string }) {
+  return (
+    <group position={[p.x, SLAB_H, p.z]}>
+      {/* Tower base */}
+      <RoundedBox args={[0.46, 0.70, 0.46]} radius={0.04} smoothness={4} position={[0, 0.35, 0]} castShadow receiveShadow>
+        <meshStandardMaterial color="#0f1929" roughness={0.45} metalness={0.45} />
+      </RoundedBox>
+      {/* Glass curtain facade */}
+      <mesh position={[0, 0.35, 0.232]}>
+        <planeGeometry args={[0.42, 0.68]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.22} transparent opacity={0.55} roughness={0.1} metalness={0.6} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      {/* Window rows */}
+      {[0.12, 0.26, 0.40, 0.54].map((oy, row) =>
+        [-0.12, 0, 0.12].map((ox, col) => (
+          <mesh key={`${row}-${col}`} position={[ox, oy, 0.234]}>
+            <boxGeometry args={[0.07, 0.08, 0.004]} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.1} roughness={0.1} />
+          </mesh>
+        ))
+      )}
+      {/* Roof cap */}
+      <mesh position={[0, 0.715, 0]}>
+        <boxGeometry args={[0.48, 0.030, 0.48]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.8} roughness={0.2} metalness={0.6} />
+      </mesh>
+      {/* Antenna */}
+      <mesh position={[0, 0.715 + 0.18, 0]} castShadow>
+        <cylinderGeometry args={[0.008, 0.008, 0.36, 5]} />
+        <meshStandardMaterial color="#cbd5e1" metalness={0.9} roughness={0.1} />
+      </mesh>
+      <mesh position={[0, 0.715 + 0.37, 0]}>
+        <sphereGeometry args={[0.018, 6, 5]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={2.0} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Dispatches the right landmark based on sector type */
+function SectorLandmark({ sector }: { sector: TacticalSector }) {
+  const p = mapToWorldVec(sector.x + 0.5, sector.y + 0.5);
+  if (sector.type === "School")      return <SchoolBuilding      p={p} color={sector.color} />;
+  if (sector.type === "Industrial")  return <IndustrialBuilding  p={p} color={sector.color} />;
+  if (sector.type === "Residential") return <ResidentialBuilding p={p} color={sector.color} />;
+  if (sector.type === "Commercial")  return <CommercialBuilding  p={p} color={sector.color} />;
+  return null;
+}
+
+// ─── colored sector label billboard ──────────────────────────────────────────
+function SectorLabel({ sector }: { sector: TacticalSector }) {
+  const p = mapToWorldVec(sector.x + 0.5, sector.y + 0.5, SLAB_H + 1.1);
+  return (
+    <group position={[p.x, p.y, p.z]}>
+      <Html
+        center
+        distanceFactor={7}
+        style={{ pointerEvents: "none", userSelect: "none" }}
+        zIndexRange={[0, 10]}
+      >
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+          <div style={{
+            background: "rgba(2,6,20,0.92)",
+            border: `1.5px solid ${sector.color}`,
+            borderRadius: "5px",
+            padding: "3px 10px",
+            fontFamily: "monospace",
+            fontSize: "12px",
+            fontWeight: 900,
+            letterSpacing: "0.18em",
+            color: sector.color,
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
+            boxShadow: `0 0 10px ${sector.color}55`,
+          }}>
+            {sector.icon} {sector.id}
+          </div>
+          <div style={{
+            background: "rgba(2,6,20,0.80)",
+            border: `1px solid ${sector.color}44`,
+            borderRadius: "3px",
+            padding: "1px 7px",
+            fontFamily: "monospace",
+            fontSize: "8px",
+            fontWeight: 700,
+            letterSpacing: "0.14em",
+            color: sector.color,
+            opacity: 0.85,
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
+          }}>
+            {sector.type}
+          </div>
+        </div>
+      </Html>
+    </group>
+  );
 }
 
 // ─── tile slab ────────────────────────────────────────────────────────────────
@@ -785,6 +1042,16 @@ const IsoScene = forwardRef<
 
       <IsoGridLines gridSize={gridSize} lodStep={lodStep} />
       <GridBorder gridSize={gridSize} />
+
+      {/* ── Sector zones ── */}
+      {TACTICAL_SECTORS.map((s) => (
+        <group key={`sector-${s.id}`}>
+          <SectorZoneRing    sx={s.x} sy={s.y} color={s.color} />
+          <SectorCornerTicks sx={s.x} sy={s.y} color={s.color} />
+          <SectorLandmark    sector={s} />
+          <SectorLabel       sector={s} />
+        </group>
+      ))}
 
       {cells.map(({ x: ix, y: iy }) => {
         const key  = `${ix}-${iy}`;
