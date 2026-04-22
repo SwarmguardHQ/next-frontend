@@ -221,15 +221,6 @@ export default function Header() {
                 )}
               </div>
 
-              {/* ── Primary CTA: Open Tactical ── */}
-              <Link
-                href="/tactical"
-                className="hidden items-center gap-1.5 rounded-lg bg-cyan-500/15 border border-cyan-500/30 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.15)] transition-all duration-150 hover:bg-cyan-500/25 hover:border-cyan-400/50 hover:text-cyan-200 hover:shadow-[0_0_18px_rgba(6,182,212,0.25)] sm:flex"
-              >
-                <Radio className="h-3.5 w-3.5" />
-                Tactical Ops
-                <ChevronRight className="h-3 w-3 opacity-60" />
-              </Link>
             </div>
           </div>
         </div>
@@ -322,20 +313,6 @@ export default function Header() {
               })}
 
               {/* Quick launch */}
-              <div className="mt-4 border-t border-slate-800/60 pt-4">
-                <p className="mb-2 px-2 text-[9px] font-bold uppercase tracking-[0.22em] text-slate-600">
-                  Quick Launch
-                </p>
-                <Link
-                  href="/tactical"
-                  onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-3 rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-cyan-300 transition-colors hover:bg-cyan-500/20"
-                >
-                  <Radio className="h-4 w-4 text-cyan-400" />
-                  Open Tactical Ops
-                  <ChevronRight className="ml-auto h-3.5 w-3.5" />
-                </Link>
-              </div>
             </div>
 
             {/* Drawer footer — operator info + status */}

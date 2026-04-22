@@ -50,9 +50,7 @@ import {
 } from "@/components/ui/table";
 import { useWorldStream } from "@/lib/useWorldStream";
 import { getBackendOrigin } from "@/lib/backendOrigin";
-import { api } from "@/lib/api";
 import type { WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
-import { MesaSimPanel } from "@/components/sim/MesaSimPanel";
 import { cn } from "@/lib/utils";
 
 // ─── Stream types ──────────────────────────────────────────────────────────────
@@ -183,8 +181,6 @@ export default function DashboardPage() {
   const [stream, setStream] = useState<StreamPoint[]>(() => createSeedPoints());
   const [events, setEvents] = useState<EventLog[]>([]);
   const [mounted, setMounted] = useState(false);
-  /** Resolved REST base for display (avoids SSR/client mismatch on relative `/api`). */
-  const [restApiDisplay, setRestApiDisplay] = useState<string>("");
 
   const applyMeshTailToEvents = useCallback((meshTail: string[]) => {
     if (!meshTail.length) return;
@@ -205,46 +201,10 @@ export default function DashboardPage() {
     });
   }, []);
 
-  // ── Connection fallback state ──
-  const [isLlamaFallback, setIsLlamaFallback] = useState(false);
-  const [lostDuration, setLostDuration] = useState(0);
-
-  useEffect(() => {
-    let timer: number | undefined;
-    if (isLlamaFallback) {
-      timer = window.setInterval(() => {
-        setLostDuration((prev) => prev + 1);
-      }, 1000);
-    } else {
-      setLostDuration(0);
-    }
-    return () => window.clearInterval(timer);
-  }, [isLlamaFallback]);
-  
-  const formattedDuration = `${Math.floor(lostDuration / 60)}:${(lostDuration % 60).toString().padStart(2, '0')}`;
-
-  const handleToggleBaseLink = async () => {
-    const nextState = !isLlamaFallback;
-    setIsLlamaFallback(nextState);
-    
-    try {
-      // online_mode is true when we are NOT in Llama fallback
-      await api.missions.create({
-        scenarios: "default",
-        custom_prompt: "",
-        online_mode: !nextState
-      });
-      console.log(`Successfully configured mission connection status: online_mode = ${!nextState}`);
-    } catch (e) {
-      console.error("Failed to toggle model via API", e);
-    }
-  };
-
   // ── Telemetry mount + seed events ──
   const [simVisual, setSimVisual] = useState<WorldStreamSimVisual | null>(null);
-  const [mesaBusy, setMesaBusy] = useState(false);
 
-  const { droneData, survivorData, worldMetrics, worldStreamLive, apiError, apiLoading, refetch } =
+  const { droneData, survivorData, worldMetrics, worldStreamLive, apiError, apiLoading } =
     useWorldStream({
       onPollMeshLog: applyMeshTailToEvents,
       onStreamTick: (data: WorldStreamTickPayload) => {
@@ -253,27 +213,9 @@ export default function DashboardPage() {
       },
     });
 
-  const handleMesaStep = useCallback(async () => {
-    setMesaBusy(true);
-    try {
-      await api.world.mesaStep(1);
-      await refetch();
-    } catch {
-      /* Mesa optional */
-    } finally {
-      setMesaBusy(false);
-    }
-  }, [refetch]);
-
   // ── Telemetry mount ──
   useEffect(() => {
     setMounted(true);
-    const base = process.env.NEXT_PUBLIC_API_URL?.trim() || "/api";
-    setRestApiDisplay(
-      base.startsWith("http://") || base.startsWith("https://")
-        ? base.replace(/\/$/, "")
-        : `${window.location.origin}${base.startsWith("/") ? base : `/${base}`}`,
-    );
     const now = Date.now();
     setEvents([
       { id: "e1", ts: formatClock(now - 85000), level: "HAZARD",    text: "High wind shear detected near (12.4, 45.1). Rerouting flight paths." },
@@ -447,30 +389,9 @@ export default function DashboardPage() {
 
         {/* Right: badges + CTA */}
         <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            className={
-              worldStreamLive
-                ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
-                : "border border-slate-500/40 bg-slate-500/10 text-slate-400"
-            }
-          >
-            <Wifi className="h-3 w-3" />{" "}
-            {worldStreamLive ? "WORLD SSE" : "WORLD · REST fallback"}
-          </Badge>
           <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
             <Target className="h-3 w-3" /> AI Allocation
           </Badge>
-          <Badge className="border border-emerald-400/40 bg-emerald-500/10 text-emerald-300">
-            <Wifi className="h-3 w-3" /> LIVE LINK
-          </Badge>
-          <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
-            <Target className="h-3 w-3" /> AI ALLOCATION
-          </Badge>
-          {apiError && (
-            <Badge className="border border-amber-400/40 bg-amber-500/10 text-amber-300">
-              <WifiOff className="h-3 w-3" /> DEMO DATA
-            </Badge>
-          )}
           {simVisual && worldStreamLive && (
             <Badge className="border border-violet-400/40 bg-violet-500/10 text-violet-200">
               <Radar className="h-3 w-3" /> Mesa Step {simVisual.mesa_step}
@@ -481,10 +402,6 @@ export default function DashboardPage() {
               <WifiOff className="h-3 w-3" /> API Error
             </Badge>
           )}
-          {/* Endpoint info — collapsed into a small pill */}
-          <span className="hidden rounded-md border border-slate-800/60 bg-slate-900/50 px-2 py-0.5 font-mono text-[9px] text-slate-600 xl:inline-flex">
-            {restApiDisplay || "…"}
-          </span>
         </div>
       </div>
 
@@ -536,15 +453,6 @@ export default function DashboardPage() {
                 />
               </div>
             </div>
-          </div>
-          <div className="mt-4 border-t border-slate-800/50 pt-4">
-            <MesaSimPanel
-              variant="card"
-              simVisual={simVisual}
-              streamLive={worldStreamLive}
-              mesaBusy={mesaBusy}
-              onMesaStep={handleMesaStep}
-            />
           </div>
         </div>
       </div>
@@ -1021,7 +929,7 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="max-h-85 space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
+                <div className="max-h-52 space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
                   {events.filter(ev => ["HAZARD", "BATTERY", "SURVIVOR"].includes(ev.level)).map((ev) => (
                     <div key={ev.id} className="rounded-md border border-slate-700/70 bg-slate-900/40 p-2">
                       <div className="mb-1 flex items-center justify-between text-[11px]">

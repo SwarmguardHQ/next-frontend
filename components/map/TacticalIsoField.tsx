@@ -56,6 +56,7 @@ export type TacticalIsoFieldProps = {
   onSelectItem: (clientX: number, clientY: number, item: TacticalPick) => void;
   onDeselect: () => void;
   onAzimuthRad?: (rad: number) => void;
+  onSwitchToGrid?: () => void;
 };
 
 function clamp(n: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, n)); }
@@ -96,11 +97,12 @@ function MinimapLegend({ color, label, sq }: { color: string; label: string; sq?
 }
 
 function MinimapPanel({
-  gridSize, drones, survivors, chargingStations, supplyDepots, onClose,
+  gridSize, drones, survivors, chargingStations, supplyDepots, onClose, onSwitchToGrid,
 }: {
   gridSize: number; drones: Drone[]; survivors: Survivor[];
   chargingStations: MapInfraItem[]; supplyDepots: MapInfraItem[];
   onClose: () => void;
+  onSwitchToGrid?: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cell = MM / gridSize;
@@ -163,7 +165,9 @@ function MinimapPanel({
   return (
     <div className="overflow-hidden rounded-xl border border-cyan-500/30 bg-black/90 shadow-xl shadow-black/60">
       <div className="flex items-center justify-between bg-cyan-950/50 px-2.5 py-1.5">
-        <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-cyan-400">Minimap</span>
+        <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-cyan-400">
+          Minimap
+        </span>
         <button
           onClick={onClose}
           className="ml-3 flex h-4 w-4 items-center justify-center rounded text-slate-500 hover:bg-slate-700/60 hover:text-slate-200 text-xs leading-none"
@@ -171,7 +175,20 @@ function MinimapPanel({
           ×
         </button>
       </div>
-      <canvas ref={canvasRef} width={MM} height={MM} style={{ width: MM, height: MM }} className="block" />
+      <div
+        onClick={onSwitchToGrid}
+        className={onSwitchToGrid ? "relative cursor-pointer group" : undefined}
+        title={onSwitchToGrid ? "Click to open 2D grid view" : undefined}
+      >
+        <canvas ref={canvasRef} width={MM} height={MM} style={{ width: MM, height: MM }} className="block" />
+        {onSwitchToGrid && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100">
+            <span className="rounded-md border border-cyan-400/60 bg-cyan-950/80 px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest text-cyan-300">
+              Open 2D Grid
+            </span>
+          </div>
+        )}
+      </div>
       <div className="flex items-center gap-3 bg-black/50 px-2.5 py-1.5">
         <MinimapLegend color="bg-emerald-400" label="G" />
         <MinimapLegend color="bg-red-400"     label="R" />
@@ -826,7 +843,7 @@ IsoScene.displayName = "IsoScene";
 // ─── canvas + overlay wrapper ─────────────────────────────────────────────────
 export const TacticalIsoField = forwardRef<TacticalIsoControls, TacticalIsoFieldProps>(
   (props, ref) => {
-    const { drones, survivors, chargingStations, supplyDepots, gridSize, locationName } = props;
+    const { drones, survivors, chargingStations, supplyDepots, gridSize, locationName, onSwitchToGrid } = props;
     const [azimuthDeg, setAzimuthDeg] = useState(0);
     const [showMinimap, setShowMinimap] = useState(true);
     const onAz = useCallback((r: number) => setAzimuthDeg((r * 180) / Math.PI), []);
@@ -875,6 +892,7 @@ export const TacticalIsoField = forwardRef<TacticalIsoControls, TacticalIsoField
               chargingStations={chargingStations}
               supplyDepots={supplyDepots}
               onClose={() => setShowMinimap(false)}
+              onSwitchToGrid={onSwitchToGrid}
             />
           ) : (
             <button

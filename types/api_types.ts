@@ -9,76 +9,6 @@ export interface SensorData {
   value: string | number;
 }
 
-// ── Multi-modal scan payloads ─────────────────────────────────────────────────
-
-export interface ThermalBlob {
-  centroid: [number, number];
-  area: number;
-  mean_heat: number;
-  peak_heat: number;
-}
-
-export interface RGBChannels {
-  r: number;
-  g: number;
-  b: number;
-  confidence: number;
-}
-
-export interface ThermalScanCell {
-  pos: [number, number];
-  heat: number;
-  confirmed: boolean;
-  fused_confidence: number;
-  modalities: ('thermal_ir' | 'rgb_camera' | 'thermal_blob')[];
-  condition_hint: 'critical' | 'moderate' | 'stable' | 'unknown';
-  rgb: RGBChannels | null;
-}
-
-export interface RGBHit {
-  x: number;
-  y: number;
-  r: number;
-  g: number;
-  b: number;
-  confidence: number;
-  condition_hint: 'critical' | 'moderate' | 'stable' | 'unknown';
-  distance: number;
-}
-
-/** Response from thermal_scan MCP tool */
-export interface ThermalScanResult {
-  drone_id: string;
-  scan_position: { x: number; y: number };
-  scan_radius: number;
-  survivors_detected: {
-    survivor_id: string;
-    position: { x: number; y: number };
-    condition: string;
-    priority: number;
-    heat_reading: number;
-    distance: number;
-    detection_method: 'thermal_ir';
-  }[];
-  thermal_blobs: ThermalBlob[];
-  battery_remaining: number;
-}
-
-/** Response from rgb_scan MCP tool */
-export interface RGBScanResult {
-  drone_id: string;
-  scan_position: { x: number; y: number };
-  scan_radius: number;
-  rgb_hits: (RGBHit & {
-    survivor_id: string;
-    position: { x: number; y: number };
-    condition: string;
-    rgb_confidence: number;
-    detection_method: 'rgb_camera';
-  })[];
-  battery_remaining: number;
-}
-
 export interface Drone {
   drone_id: string;
   position: Position;
@@ -209,7 +139,6 @@ export interface MissionsListResponse {
 export interface MissionRequest {
   scenarios: string;
   custom_prompt?: string;
-	online_mode: boolean;
 }
 
 export interface MissionStartedResponse {

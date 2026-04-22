@@ -295,7 +295,24 @@ function ShowcaseView({ drone, onBack }: { drone: Drone; onBack: () => void }) {
                             <p className="text-xs text-slate-500 mt-1 font-mono">{meta.model} · {meta.tagline}</p>
                         </div>
 
-
+                        {/* Callout annotations */}
+                        {meta.callouts.map((c, i) => {
+                            const rad = (c.angle * Math.PI) / 180;
+                            const cx = 50 + Math.sin(rad) * c.radius * 11;
+                            const cy = 48 - c.yOffset * 18 - Math.cos(rad) * c.radius * 5;
+                            return (
+                                <div key={i} className="absolute pointer-events-none animate-in fade-in duration-500"
+                                    style={{ left: `${cx}%`, top: `${cy}%`, animationDelay: `${i * 150}ms` }}>
+                                    <div className="flex items-center gap-2 whitespace-nowrap">
+                                        <div className="h-px w-8 opacity-60" style={{ background: meta.accentHex }} />
+                                        <span className="text-[10px] font-mono tracking-wider px-2 py-0.5 rounded border"
+                                            style={{ color: meta.accentHexLight, borderColor: `${meta.accentHex}40`, background: "#060b14cc" }}>
+                                            {c.label}
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })}
                         <p className="absolute bottom-4 right-5 text-[10px] font-mono text-slate-700 pointer-events-none">drag to rotate</p>
                     </div>
 
