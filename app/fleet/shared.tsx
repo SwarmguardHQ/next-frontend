@@ -10,6 +10,7 @@ export const FLEET_META: Record<string, {
     accentHex: string; accentHexLight: string; threeColor: number;
     maxSpeed: number; weightKg: number; rangeKm: number; flightTime: number;
     windResistance: string; payload: string;
+    callouts: { label: string; angle: number; radius: number; yOffset: number }[];
 }> = {
     DRONE_ALPHA: {
         name: "Falcon Alpha", model: "Recon MkIV", tagline: "Eyes in the sky",
@@ -17,6 +18,11 @@ export const FLEET_META: Record<string, {
         accentHex: "#3b82f6", accentHexLight: "#93c5fd", threeColor: 0x3b82f6,
         maxSpeed: 18, weightKg: 1.4, rangeKm: 12, flightTime: 38, windResistance: "Level 5",
         payload: "4K Stabilised Gimbal",
+        callouts: [
+            { label: "4K Gimbal", angle: 45, radius: 1.6, yOffset: -0.3 },
+            { label: "IMU Array", angle: 185, radius: 1.5, yOffset: 0.2 },
+            { label: "GPS Module", angle: 275, radius: 1.4, yOffset: 0.4 },
+        ],
     },
     DRONE_BRAVO: {
         name: "Hawk Beta", model: "Survey Pro X", tagline: "Map the unmappable",
@@ -24,6 +30,11 @@ export const FLEET_META: Record<string, {
         accentHex: "#10b981", accentHexLight: "#6ee7b7", threeColor: 0x10b981,
         maxSpeed: 14, weightKg: 2.1, rangeKm: 18, flightTime: 52, windResistance: "Level 6",
         payload: "LiDAR + RGB Array",
+        callouts: [
+            { label: "LiDAR Pod", angle: 30, radius: 1.7, yOffset: -0.4 },
+            { label: "Hex Motors", angle: 155, radius: 1.6, yOffset: 0.1 },
+            { label: "Data Link", angle: 265, radius: 1.5, yOffset: 0.5 },
+        ],
     },
     DRONE_CHARLIE: {
         name: "Eagle Gamma", model: "Cargo Swift", tagline: "Speed when it matters",
@@ -31,6 +42,11 @@ export const FLEET_META: Record<string, {
         accentHex: "#f59e0b", accentHexLight: "#fcd34d", threeColor: 0xf59e0b,
         maxSpeed: 22, weightKg: 3.2, rangeKm: 8, flightTime: 24, windResistance: "Level 4",
         payload: "2 kg Cargo Bay",
+        callouts: [
+            { label: "Cargo Bay", angle: 20, radius: 1.8, yOffset: -0.5 },
+            { label: "Octo Array", angle: 160, radius: 1.7, yOffset: 0.1 },
+            { label: "RTK GPS", angle: 280, radius: 1.5, yOffset: 0.4 },
+        ],
     },
     DRONE_DELTA: {
         name: "Osprey Delta", model: "Stealth Lite", tagline: "Silent. Swift. Decisive.",
@@ -38,6 +54,11 @@ export const FLEET_META: Record<string, {
         accentHex: "#8b5cf6", accentHexLight: "#c4b5fd", threeColor: 0x8b5cf6,
         maxSpeed: 26, weightKg: 1.1, rangeKm: 15, flightTime: 44, windResistance: "Level 5",
         payload: "Thermal + Night Vision",
+        callouts: [
+            { label: "Thermal Cam", angle: 40, radius: 1.6, yOffset: -0.3 },
+            { label: "Noise Damp.", angle: 170, radius: 1.5, yOffset: 0.2 },
+            { label: "Stealth Body", angle: 275, radius: 1.6, yOffset: 0.3 },
+        ],
     },
     DRONE_ECHO: {
         name: "Phantom Echo", model: "Signal Relay", tagline: "Never lose connection",
@@ -45,6 +66,11 @@ export const FLEET_META: Record<string, {
         accentHex: "#ec4899", accentHexLight: "#f9a8d4", threeColor: 0xec4899,
         maxSpeed: 18, weightKg: 1.6, rangeKm: 22, flightTime: 65, windResistance: "Level 4",
         payload: "High-Gain Mesh Antenna",
+        callouts: [
+            { label: "Mesh Antenna", angle: 45, radius: 1.6, yOffset: -0.5 },
+            { label: "Signal Amp.", angle: 185, radius: 1.4, yOffset: 0.2 },
+            { label: "High-Cap Battery", angle: 275, radius: 1.5, yOffset: 0.3 },
+        ],
     },
 };
 
