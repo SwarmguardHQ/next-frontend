@@ -49,9 +49,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useWorldStream } from "@/lib/useWorldStream";
-import { api } from "@/lib/api";
+import { getBackendOrigin } from "@/lib/backendOrigin";
 import type { WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
-import { MesaSimPanel } from "@/components/sim/MesaSimPanel";
+import { cn } from "@/lib/utils";
 
 // ─── Stream types ──────────────────────────────────────────────────────────────
 type StreamPoint = {
@@ -201,46 +201,10 @@ export default function DashboardPage() {
     });
   }, []);
 
-  // ── Connection fallback state ──
-  const [isLlamaFallback, setIsLlamaFallback] = useState(false);
-  const [lostDuration, setLostDuration] = useState(0);
-
-  useEffect(() => {
-    let timer: number | undefined;
-    if (isLlamaFallback) {
-      timer = window.setInterval(() => {
-        setLostDuration((prev) => prev + 1);
-      }, 1000);
-    } else {
-      setLostDuration(0);
-    }
-    return () => window.clearInterval(timer);
-  }, [isLlamaFallback]);
-  
-  const formattedDuration = `${Math.floor(lostDuration / 60)}:${(lostDuration % 60).toString().padStart(2, '0')}`;
-
-  const handleToggleBaseLink = async () => {
-    const nextState = !isLlamaFallback;
-    setIsLlamaFallback(nextState);
-    
-    try {
-      // online_mode is true when we are NOT in Llama fallback
-      await api.missions.create({
-        scenarios: "default",
-        custom_prompt: "",
-        online_mode: !nextState
-      });
-      console.log(`Successfully configured mission connection status: online_mode = ${!nextState}`);
-    } catch (e) {
-      console.error("Failed to toggle model via API", e);
-    }
-  };
-
   // ── Telemetry mount + seed events ──
   const [simVisual, setSimVisual] = useState<WorldStreamSimVisual | null>(null);
-  const [mesaBusy, setMesaBusy] = useState(false);
 
-  const { droneData, survivorData, worldMetrics, worldStreamLive, apiError, apiLoading, refetch } =
+  const { droneData, survivorData, worldMetrics, worldStreamLive, apiError, apiLoading } =
     useWorldStream({
       onPollMeshLog: applyMeshTailToEvents,
       onStreamTick: (data: WorldStreamTickPayload) => {
@@ -248,18 +212,6 @@ export default function DashboardPage() {
         setSimVisual(data.sim_visual ?? null);
       },
     });
-
-  const handleMesaStep = useCallback(async () => {
-    setMesaBusy(true);
-    try {
-      await api.world.mesaStep(1);
-      await refetch();
-    } catch {
-      /* Mesa optional */
-    } finally {
-      setMesaBusy(false);
-    }
-  }, [refetch]);
 
   // ── Telemetry mount ──
   useEffect(() => {
@@ -385,6 +337,16 @@ export default function DashboardPage() {
   const failuresHandled = Math.floor(droneCount * 0.3) + 1;
   const avgRecoveryTime = (12 + (offlineCount * 2.5)).toFixed(1);
 
+  /** Backend + stream wiring (REST via /api rewrite, SSE direct to FastAPI origin). */
+  const backendOrigin = useMemo(() => getBackendOrigin(), []);
+  const linkStatus = useMemo(() => {
+    if (apiError) return "offline" as const;
+    if (apiLoading && !droneData) return "connecting" as const;
+    if (worldStreamLive) return "live" as const;
+    if (droneData) return "rest" as const;
+    return "connecting" as const;
+  }, [apiError, apiLoading, droneData, worldStreamLive]);
+
   if (!mounted) {
     return (
       <div className="flex min-h-[calc(100dvh-4rem)] w-full animate-pulse bg-background" />
@@ -395,115 +357,105 @@ export default function DashboardPage() {
     <div className="siren-grid-bg flex min-h-[calc(100dvh-4rem)] w-full flex-col overflow-y-auto font-mono text-muted-foreground">
       <div className="mx-auto w-full max-w-[1600px] flex-1 space-y-4 p-4 pb-16 sm:p-6">
 
-      {/* ── Page title + status ── */}
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+      {/* ── Page header ── */}
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Title */}
         <div className="min-w-0">
-          <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-            Command dashboard
-          </h2>
-          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Fleet intelligence · live world stream
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-xl font-bold uppercase tracking-[0.12em] text-white sm:text-2xl">
+              Command Dashboard
+            </h2>
+            {/* Live status badge */}
+            <span className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]",
+              linkStatus === "live"       ? "border-emerald-800/50 bg-emerald-950/60 text-emerald-400" :
+              linkStatus === "rest"       ? "border-amber-800/50   bg-amber-950/60   text-amber-400"   :
+              linkStatus === "offline"    ? "border-red-800/50     bg-red-950/60     text-red-400"     :
+                                            "border-slate-700/50   bg-slate-900/60   text-slate-400",
+            )}>
+              <span className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                linkStatus === "live"    ? "bg-emerald-400 animate-pulse" :
+                linkStatus === "rest"    ? "bg-amber-400" :
+                linkStatus === "offline" ? "bg-red-400"   : "bg-slate-500 animate-pulse",
+              )} />
+              {linkStatus === "live" ? "Live Stream" : linkStatus === "rest" ? "REST Only" : linkStatus === "offline" ? "Offline" : "Connecting…"}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.22em] text-slate-600">
+            Fleet Intelligence · SAR Coordination · World Stream
           </p>
         </div>
+
+        {/* Right: badges + CTA */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleToggleBaseLink}
-            className="rounded border border-red-500/40 bg-red-500/10 px-3 py-1 text-xs text-red-400 hover:bg-red-500/20 transition-colors"
-          >
-            Toggle Connection
-          </button>
-          
-          <Badge
-            className={
-              worldStreamLive
-                ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
-                : "border border-slate-500/40 bg-slate-500/10 text-slate-400"
-            }
-          >
-            <Wifi className="h-3 w-3" />{" "}
-            {worldStreamLive ? "WORLD SSE" : "WORLD · REST fallback"}
-          </Badge>
           <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
-            <Radar className="h-3 w-3" /> OFFLINE CAPABLE
+            <Target className="h-3 w-3" /> AI Allocation
           </Badge>
-          
-          {isLlamaFallback ? (
-            <>
-              <Badge className="border border-red-400/40 bg-red-500/10 text-red-500">
-                <WifiOff className="h-3 w-3 mr-1" /> BASE LINK LOST ({formattedDuration})
-              </Badge>
-              <Badge className="border border-purple-400/40 bg-purple-500/10 text-purple-300">
-                <Target className="h-3 w-3 mr-1" /> ONBOARD LLAMA
-              </Badge>
-            </>
-          ) : (
-            <>
-              <Badge className="border border-emerald-400/40 bg-emerald-500/10 text-emerald-300">
-                <Wifi className="h-3 w-3 mr-1" /> LIVE LINK
-              </Badge>
-              <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
-                <Target className="h-3 w-3 mr-1" /> AI ALLOCATION
-              </Badge>
-            </>
-          )}
-          {apiError && (
-            <Badge className="border border-amber-400/40 bg-amber-500/10 text-amber-300">
-              <WifiOff className="h-3 w-3" /> DEMO DATA
-            </Badge>
-          )}
           {simVisual && worldStreamLive && (
             <Badge className="border border-violet-400/40 bg-violet-500/10 text-violet-200">
-              <Radar className="h-3 w-3" /> MESA step {simVisual.mesa_step}
+              <Radar className="h-3 w-3" /> Mesa Step {simVisual.mesa_step}
+            </Badge>
+          )}
+          {apiError && (
+            <Badge className="border border-red-500/40 bg-red-500/10 text-red-300" title={apiError}>
+              <WifiOff className="h-3 w-3" /> API Error
             </Badge>
           )}
         </div>
       </div>
 
       {/* ── Mission State ── */}
-      <Card className="border-t-4 border-t-cyan-500 shadow-[4px_4px_0_0_var(--nb-shadow-accent)]">
-        <CardContent className="space-y-4 pt-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] tracking-[0.16em] text-slate-400 uppercase">Live Mission Command State</p>
-              <p className="mt-1 text-2xl font-bold tracking-wide text-white">{missionStatus}</p>
+      <div className="overflow-hidden rounded-xl border border-slate-800/60 bg-slate-900/50 shadow-xl">
+        {/* Top accent strip with risk color */}
+        <div className={cn(
+          "h-[3px] w-full",
+          riskBand === "CRITICAL" ? "bg-linear-to-r from-red-600 via-red-400 to-red-600" :
+          riskBand === "ELEVATED" ? "bg-linear-to-r from-amber-600 via-amber-400 to-amber-600" :
+                                    "bg-linear-to-r from-cyan-700 via-cyan-400 to-cyan-700",
+        )} />
+        <div className="p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-4">
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-slate-500">Live Mission State</p>
+                <p className="mt-0.5 text-xl font-bold tracking-wide text-white">{missionStatus}</p>
+              </div>
+              <div className={cn(
+                "flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-widest",
+                riskBand === "CRITICAL" ? "border-red-500/40 bg-red-950/60 text-red-300" :
+                riskBand === "ELEVATED" ? "border-amber-500/40 bg-amber-950/60 text-amber-300" :
+                                          "border-emerald-500/40 bg-emerald-950/60 text-emerald-300",
+              )}>
+                <span className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  riskBand === "CRITICAL" ? "bg-red-400 animate-pulse" :
+                  riskBand === "ELEVATED" ? "bg-amber-400" : "bg-emerald-400",
+                )} />
+                Risk {riskBand}
+              </div>
             </div>
-            <Badge
-              className={`border ${
-                riskBand === "CRITICAL"
-                  ? "border-red-400/50 bg-red-500/15 text-red-300"
-                  : riskBand === "ELEVATED"
-                    ? "border-amber-400/50 bg-amber-500/15 text-amber-300"
-                    : "border-emerald-400/50 bg-emerald-500/15 text-emerald-300"
-              }`}
-            >
-              RISK {riskBand}
-            </Badge>
+            {/* Coverage bar */}
+            <div className="min-w-[220px] flex-1 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="font-semibold uppercase tracking-widest text-slate-500">Area Coverage</span>
+                <span className="tabular-nums font-bold text-white">{current.coverage.toFixed(1)}%</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500",
+                    current.coverage >= 85 ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" :
+                    current.coverage >= 70 ? "bg-sky-400    shadow-[0_0_8px_rgba(56,189,248,0.5)]" :
+                                             "bg-amber-400  shadow-[0_0_8px_rgba(251,191,36,0.5)]",
+                  )}
+                  style={{ width: `${current.coverage}%` }}
+                />
+              </div>
+            </div>
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-slate-400">
-              <span className="tracking-widest uppercase">Area Closure Progress</span>
-              <span className="tabular-nums font-bold text-white">{current.coverage.toFixed(1)}%</span>
-            </div>
-            <div className="h-2 rounded-full bg-slate-800">
-              <div
-                className={`h-2 rounded-full transition-all ${
-                  current.coverage >= 85 ? "bg-emerald-400"
-                  : current.coverage >= 70 ? "bg-sky-400"
-                  : "bg-amber-400"
-                }`}
-                style={{ width: `${current.coverage}%` }}
-              />
-            </div>
-          </div>
-          <MesaSimPanel
-            variant="card"
-            simVisual={simVisual}
-            streamLive={worldStreamLive}
-            mesaBusy={mesaBusy}
-            onMesaStep={handleMesaStep}
-          />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* ── 4 KPI Cards ── */}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -511,94 +463,123 @@ export default function DashboardPage() {
           {
             label: "Mission Progress",
             value: `${missionProgress.toFixed(1)}%`,
-            hint: `Weighted objective completion`,
-            icon: <Target className="h-3 w-3 text-emerald-300" />,
+            hint: "Weighted objective completion",
+            icon: <Target className="h-4 w-4" />,
+            accent: "border-l-emerald-500",
+            iconColor: "text-emerald-400",
+            glow: "shadow-[inset_0_0_40px_rgba(52,211,153,0.04)]",
           },
           {
             label: "Area Coverage",
             value: `${current.coverage.toFixed(1)}%`,
-            hint: `Geographic sector scanned`,
-            icon: <Radar className="h-3 w-3 text-sky-300" />,
+            hint: "Geographic sectors scanned",
+            icon: <Radar className="h-4 w-4" />,
+            accent: "border-l-sky-500",
+            iconColor: "text-sky-400",
+            glow: "shadow-[inset_0_0_40px_rgba(56,189,248,0.04)]",
           },
           {
             label: "Survivors Rescued",
             value: `${rescuedCount} / ${totalSurvivors}`,
-            hint: `${totalSurvivors - rescuedCount} awaiting rescue (${criticalUnrescued} critical)`,
-            icon: <Users className="h-3 w-3 text-amber-300" />,
+            hint: `${totalSurvivors - rescuedCount} awaiting · ${criticalUnrescued} critical`,
+            icon: <Users className="h-4 w-4" />,
+            accent: criticalUnrescued > 0 ? "border-l-red-500" : "border-l-amber-500",
+            iconColor: criticalUnrescued > 0 ? "text-red-400" : "text-amber-400",
+            glow: criticalUnrescued > 0 ? "shadow-[inset_0_0_40px_rgba(239,68,68,0.05)]" : "shadow-[inset_0_0_40px_rgba(251,191,36,0.04)]",
           },
           {
             label: "Swarm Efficiency",
             value: `${taskEfficiency}%`,
-            hint: `Fleet Utilization: ${avgUtilization}%`,
-            icon: <Zap className="h-3 w-3 text-purple-300" />,
+            hint: `Fleet utilisation ${avgUtilization}%`,
+            icon: <Zap className="h-4 w-4" />,
+            accent: "border-l-violet-500",
+            iconColor: "text-violet-400",
+            glow: "shadow-[inset_0_0_40px_rgba(139,92,246,0.04)]",
           },
         ].map((item, i) => (
-          <Card key={i} className="border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.2)] flex flex-col p-4 items-center justify-center text-center">
-            <p className="text-[10px] tracking-[0.1em] text-slate-400 uppercase mb-0 flex items-center justify-center gap-1.5">
-              {item.icon}
-              {item.label}
-            </p>
-            <span className="tabular-nums font-bold text-2xl text-white">{item.value}</span>
-          </Card>
+          <div
+            key={i}
+            className={cn(
+              "flex flex-col justify-between rounded-xl border border-slate-800/60 border-l-2 bg-slate-900/50 p-4",
+              item.accent, item.glow,
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">{item.label}</p>
+              <span className={cn("rounded-lg bg-slate-800/60 p-1.5", item.iconColor)}>
+                {item.icon}
+              </span>
+            </div>
+            <div className="mt-3">
+              <span className="tabular-nums text-3xl font-bold leading-none text-white">{item.value}</span>
+            </div>
+            <p className="mt-2 text-[9px] text-slate-600">{item.hint}</p>
+          </div>
         ))}
       </div>
 
       {/* ── Tier 2: Network, Safety & Recovery ── */}
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {/* Average Drone Utilization */}
-        <Card className="border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.2)] flex flex-col p-4 items-center justify-center text-center">
-            <p className="text-[10px] tracking-[0.1em] text-slate-400 uppercase mb-0 flex items-center justify-center gap-1.5">
-              <Zap className="w-3 h-3 text-sky-400" />
-              Average Drone Utilization
-            </p>
-            <span className="tabular-nums font-bold text-2xl text-white">{avgUtilization}%</span>
-        </Card>
-
-        {/* Overlapping Scans */}
-        <Card className="border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.2)] flex flex-col p-4 items-center justify-center text-center">
-            <p className="text-[10px] tracking-[0.1em] text-slate-400 uppercase mb-0 flex items-center justify-center gap-1.5">
-              {hasOverlapping ? <Activity className="w-3 h-3 text-amber-400" /> : <Target className="w-3 h-3 text-emerald-400" />}
-              Overlapping Scans (Redundancy)
-            </p>
-            <span className="tabular-nums font-bold text-2xl text-white">{overlapPct}%</span>
-        </Card>
-
-        {/* Communication Success */}
-        <Card className="border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.2)] flex flex-col p-4 items-center justify-center text-center">
-            <p className="text-[10px] tracking-[0.1em] text-slate-400 uppercase mb-0 flex items-center justify-center gap-1.5">
-              <Wifi className={`w-3 h-3 ${parseFloat(commSuccess) < 99 ? 'text-amber-400' : 'text-emerald-400'}`} />
-              Mesh Comm Success Rate
-            </p>
-            <span className="tabular-nums font-bold text-2xl text-white">{commSuccess}%</span>
-        </Card>
-
-        {/* Collision Avoidance */}
-        <Card className="border border-sky-400/20 bg-[#111827] shadow-[0_0_0_1px_rgba(61,158,228,0.2)] flex flex-col p-4 items-center justify-center text-center">
-            <p className="text-[10px] tracking-[0.1em] text-slate-400 uppercase mb-0 flex items-center justify-center gap-1.5">
-              <ShieldCheck className="w-3 h-3 text-purple-400" />
-              Collision Avoidance
-            </p>
-            <span className="tabular-nums font-bold text-2xl text-white">100%</span>
-        </Card>
-
-        {/* System Fault Recovery */}
-        <Card className="flex flex-col items-center justify-center p-3 text-center">
-            <p className="text-[10px] tracking-[0.1em] text-slate-400 uppercase mb-0.5 flex items-center justify-center gap-1.5">
-              <Activity className="w-3 h-3 text-sky-400" />
-              Drone Failures
-            </p>
-            <div className="flex items-center justify-center gap-4">
-              <div className="flex flex-col">
-                <span className="tabular-nums font-bold text-xl text-emerald-400">{failuresHandled}</span>
-                <span className="text-[8px] text-slate-500 uppercase tracking-widest">Handled</span>
+        {[
+          {
+            label: "Drone Utilisation",
+            value: `${avgUtilization}%`,
+            icon: <Zap className="h-3.5 w-3.5 text-sky-400" />,
+            sub: null as React.ReactNode,
+          },
+          {
+            label: "Redundancy Scans",
+            value: `${overlapPct}%`,
+            icon: hasOverlapping
+              ? <Activity className="h-3.5 w-3.5 text-amber-400" />
+              : <Target className="h-3.5 w-3.5 text-emerald-400" />,
+            sub: null as React.ReactNode,
+          },
+          {
+            label: "Mesh Comm Rate",
+            value: `${commSuccess}%`,
+            icon: <Wifi className={cn("h-3.5 w-3.5", parseFloat(commSuccess) < 99 ? "text-amber-400" : "text-emerald-400")} />,
+            sub: null as React.ReactNode,
+          },
+          {
+            label: "Collision Avoid",
+            value: "100%",
+            icon: <ShieldCheck className="h-3.5 w-3.5 text-violet-400" />,
+            sub: null as React.ReactNode,
+          },
+          {
+            label: "Drone Failures",
+            value: null,
+            icon: <Activity className="h-3.5 w-3.5 text-sky-400" />,
+            sub: (
+              <div className="flex items-center gap-4">
+                <div className="flex flex-col items-center">
+                  <span className="tabular-nums text-xl font-bold text-emerald-400">{failuresHandled}</span>
+                  <span className="text-[8px] uppercase tracking-widest text-slate-600">Handled</span>
+                </div>
+                <div className="h-6 w-px bg-slate-700/60" />
+                <div className="flex flex-col items-center">
+                  <span className="tabular-nums text-xl font-bold text-emerald-400">{avgRecoveryTime}s</span>
+                  <span className="text-[8px] uppercase tracking-widest text-slate-600">Avg Recovery</span>
+                </div>
               </div>
-              <div className="w-[1px] h-6 bg-slate-700/60"></div>
-              <div className="flex flex-col">
-                <span className="tabular-nums font-bold text-xl text-emerald-400">{avgRecoveryTime}s</span>
-                <span className="text-[8px] text-slate-500 uppercase tracking-widest">Average Recovery Time</span>
-              </div>
+            ),
+          },
+        ].map((item, i) => (
+          <div
+            key={i}
+            className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-800/60 bg-slate-900/50 p-4 text-center"
+          >
+            <div className="flex items-center gap-1.5">
+              {item.icon}
+              <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
             </div>
-        </Card>
+            {item.value
+              ? <span className="tabular-nums text-2xl font-bold text-white">{item.value}</span>
+              : item.sub
+            }
+          </div>
+        ))}
       </div>
 
       {/* ── Tier 3: Main Layout Grid (2 Columns + 1 Column Sidebar) ── */}
@@ -948,7 +929,7 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="max-h-85 space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
+                <div className="max-h-52 space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
                   {events.filter(ev => ["HAZARD", "BATTERY", "SURVIVOR"].includes(ev.level)).map((ev) => (
                     <div key={ev.id} className="rounded-md border border-slate-700/70 bg-slate-900/40 p-2">
                       <div className="mb-1 flex items-center justify-between text-[11px]">

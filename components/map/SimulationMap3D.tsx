@@ -294,48 +294,6 @@ export default function SimulationMap3D({
       sizeUnits: "pixels",
     }),
 
-    // ── Sector Labels & Bounds
-    new PathLayer<{ id: string; type: string; x: number; y: number }>({
-      id: "sector-bounds",
-      data: [
-        { id: "SEC 1", type: "SCHOOL", x: 5, y: 2 },
-        { id: "SEC 2", type: "INDUSTRIAL", x: 12, y: 12 },
-        { id: "SEC 3", type: "RESIDENTIAL", x: 2, y: 16 },
-        { id: "SEC 4", type: "COMMERCIAL", x: 14, y: 6 },
-      ],
-      getPath: (d) => [
-        toCoord(d.x - 1.5, d.y - 1.5),
-        toCoord(d.x + 1.5, d.y - 1.5),
-        toCoord(d.x + 1.5, d.y + 1.5),
-        toCoord(d.x - 1.5, d.y + 1.5),
-        toCoord(d.x - 1.5, d.y - 1.5),
-      ],
-      getColor: [56, 189, 248, 255],
-      getWidth: 4,
-      widthUnits: "pixels",
-    }),
-    new TextLayer<{ id: string; type: string; x: number; y: number }>({
-      id: "sector-labels",
-      data: [
-        { id: "SEC 1", type: "SCHOOL", x: 5, y: 2 },
-        { id: "SEC 2", type: "INDUSTRIAL", x: 12, y: 12 },
-        { id: "SEC 3", type: "RESIDENTIAL", x: 2, y: 16 },
-        { id: "SEC 4", type: "COMMERCIAL", x: 14, y: 6 },
-      ],
-      getPosition: (d) => toCoord(d.x, d.y),
-      getText: (d) => d.id,
-      getSize: 12,
-      getColor: [56, 189, 248, 255],
-      getTextAnchor: "middle",
-      getAlignmentBaseline: "center",
-      visible: zoom > 14.0,
-      getPixelOffset: [0, 0],
-      fontFamily: "Barlow Condensed, sans-serif",
-      fontWeight: 800,
-      billboard: true,
-      sizeUnits: "pixels",
-    }),
-
     // ── Infrastructure: Supply Depot glow (pulsing)
     new ScatterplotLayer<InfraItem>({
       id: "depot-glow",
