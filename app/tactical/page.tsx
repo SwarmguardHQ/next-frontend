@@ -89,7 +89,7 @@ function clamp(value: number, min: number, max: number): number {
 function droneColor(status: string): string {
   if (status === "charging") return "text-emerald-400";
   if (status === "offline") return "text-red-500";
-  if (status === "returning") return "text-amber-400";
+  if (status === "relaying") return "text-amber-400";
   if (status === "scanning" || status === "flying") return "text-sky-400";
   return "text-slate-400";
 }
@@ -832,7 +832,7 @@ export default function TacticalPage() {
                     <span className="text-cyan-500/70 font-bold mb-1 tracking-widest text-[9px]">Drones</span>
                     <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-cyan-400" /> Active</div>
                     <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-emerald-400" /> Charging</div>
-                    <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-amber-400" /> Returning</div>
+                    <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-amber-400" /> Relaying</div>
                     <div className="flex items-center gap-2"><Triangle fill="currentColor" className="h-3 w-3 text-red-500 rotate-180" /> Offline</div>
                   </div>
                   <div className="flex flex-col gap-2.5 border-l border-cyan-900/30 pl-8">
@@ -1015,53 +1015,43 @@ export default function TacticalPage() {
                       const droneName = drone.drone_id.toUpperCase();
                       for (let i = missionLogs.length - 1; i >= 0; i--) {
                         const log = missionLogs[i];
-                        if (log.reasoning && log.reasoning.includes(droneName)) {
-                          currentTask = log.reasoning;
-                          break;
-                        }
-                        if (log.message && log.message.includes(droneName)) {
-                          currentTask = log.message;
-                          break;
-                        }
-                      }
+                        const logText = (log.reasoning || log.message || "");
+                        if (!logText.includes(droneName)) continue;
+                        
+                        const lowerLog = logText.toLowerCase();
 
-                      if (currentTask) {
-                        const lowerLog = currentTask.toLowerCase();
                         if (lowerLog.includes("anomaly detected") && lowerLog.includes("offline")) {
                           currentTask = "Recover offline drone";
                         } else if (lowerLog.includes("executing won claim on 'sector_")) {
-                          const m = currentTask.match(/sector_(\d+)/i);
+                          const m = lowerLog.match(/sector_(\d+)/);
                           currentTask = m ? `Scan Sector ${m[1]}` : "Scan Sector";
                         } else if (lowerLog.includes("relay") && lowerLog.includes("deployed to")) {
                           currentTask = "Deploy relay drone";
+                        } else if (lowerLog.includes("relocated existing relay")) {
+                          currentTask = "Relocate relay drone";
                         } else if (lowerLog.includes("rescue directive:")) {
-                          const mMatch = currentTask.match(/→\s*(S\d+)\s*\(([^)]+)\)/i);
+                          const mMatch = lowerLog.match(/→\s*(s\d+)\s*\(([^)]+)\)/);
                           if (mMatch) {
-                            const payloadFormatted = mMatch[2] === "medical_kit" ? "Medical Kit" : mMatch[2].charAt(0).toUpperCase() + mMatch[2].slice(1).toLowerCase();
-                            currentTask = `Rescue ${mMatch[1].toUpperCase()} (${payloadFormatted})`;
+                            const payloadFmt = mMatch[2] === "medical_kit" ? "Medical Kit" : mMatch[2].charAt(0).toUpperCase() + mMatch[2].slice(1);
+                            currentTask = `Rescue ${mMatch[1].toUpperCase()} (${payloadFmt})`;
                           } else {
                             currentTask = "Rescue Survivor";
                           }
-                        } else if (lowerLog.includes("auto-recharge triggered")) {
-                          currentTask = "Recharge drone battery";
-                        } else if (lowerLog.includes("rescuing s")) {
-                          const m = currentTask.match(/rescuing\s+(S\d+)/i);
-                          currentTask = m ? `Rescuing ${m[1].toUpperCase()}` : "Rescuing Survivor";
-                        } else if (lowerLog.includes("scanning sector")) {
-                          const m = currentTask.match(/scanning\s+sector\s+(\d+)/i);
-                          currentTask = m ? `Scanning Sector ${m[1]}` : "Scanning Sector";
-                        } else {
-                          // Clean up log format: remove brackets, emojis, drone name, arrows
-                          const clean = currentTask
-                            .replace(/\[.*?\]/g, "")
-                            .replace(/[^\x00-\x7F]/g, "")
-                            .replace(droneName, "")
-                            .replace(/drone_\w+/ig, "")
-                            .replace(/->/g, "")
-                            .trim();
-                          const words = clean.split(/\s+/).filter(w => w.length > 0).slice(0, 4);
-                          currentTask = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-                          if (!currentTask) currentTask = "En Route";
+                        } else if (lowerLog.includes("→ rescuing")) {
+                          const m = lowerLog.match(/rescuing\s+(s\d+)/);
+                          currentTask = m ? `Rescuing Survivor ${m[1].toUpperCase()}` : "Rescuing Survivor";
+                        } else if (lowerLog.includes("to depot:")) {
+                          currentTask = "En route to depot";
+                        } else if (lowerLog.includes("collect:")) {
+                          currentTask = "Collecting supplies";
+                        } else if (lowerLog.includes("to survivor:")) {
+                          currentTask = "En route to survivor";
+                        } else if (lowerLog.includes("deliver:")) {
+                          currentTask = "Delivering supplies";
+                        }
+
+                        if (currentTask) {
+                          break;
                         }
                       }
 
@@ -1071,17 +1061,16 @@ export default function TacticalPage() {
                           {drone.drone_id.replace("drone_", "")}
                         </TableCell>
                         <TableCell className="px-3 py-2 text-[10px] text-slate-300">
-                          <div className="flex flex-col gap-0.5">
-                            <div>
+                          {currentTask ? (
+                            <div className="text-[10px] text-cyan-300 font-semibold line-clamp-1" title={currentTask}>
+                              {currentTask}
+                            </div>
+                          ) : (
+                            <div className="line-clamp-1">
                               <span className={cn("font-semibold", droneColor(drone.status))}>{drone.status.toUpperCase()}</span>
                               {drone.payload ? ` · ${drone.payload.replace(/_/g, " ")}` : ""}
                             </div>
-                            {currentTask && (
-                              <div className="text-[9px] text-slate-400 italic line-clamp-2" title={currentTask}>
-                                {currentTask}
-                              </div>
-                            )}
-                          </div>
+                          )}
                         </TableCell>
                         <TableCell className="px-3 py-2 text-[10px] text-slate-500 font-mono tracking-widest w-16 align-top pt-2.5 whitespace-nowrap text-right">
                           ({Math.round(drone.position.x)}, {Math.round(drone.position.y)})

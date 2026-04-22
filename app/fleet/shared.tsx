@@ -75,7 +75,7 @@ export function generateTelemetry(baseAltitude = 50) {
 }
 
 export const isFlying = (status?: string) =>
-    ["flying", "scanning", "returning", "delivering"].includes(status ?? "");
+    ["flying", "scanning", "relaying", "delivering"].includes(status ?? "");
 
 export function buildDroneMesh(threeColor: number, motorCount = 4): THREE.Group {
     const g = new THREE.Group();

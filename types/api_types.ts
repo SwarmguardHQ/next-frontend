@@ -13,7 +13,7 @@ export interface Drone {
   drone_id: string;
   position: Position;
   battery: number;
-  status: 'idle' | 'flying' | 'scanning' | 'returning' | 'charging' | 'delivering' | 'offline';
+  status: 'idle' | 'flying' | 'scanning' | 'relaying' | 'charging' | 'delivering' | 'offline';
   payload: string | null;
   assigned_sector: string | null;
   last_seen: string;

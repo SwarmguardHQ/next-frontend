@@ -66,7 +66,7 @@ interface Props {
 function droneColor(status: string): Color4 {
   if (status === "charging") return [34, 197, 94, 230];
   if (status === "offline") return [239, 68, 68, 200];
-  if (status === "returning") return [245, 158, 11, 230];
+  if (status === "relaying") return [245, 158, 11, 230];
   return [61, 158, 228, 240];
 }
 
