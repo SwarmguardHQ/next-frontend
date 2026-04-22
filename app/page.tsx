@@ -149,7 +149,7 @@ function getStatusColor(status: string) {
     case "delivering": return "text-sky-400";
     case "charging": return "text-emerald-400";
     case "offline": return "text-red-500";
-    case "returning": return "text-amber-400";
+    case "relaying": return "text-amber-400";
     default: return "text-slate-400";
   }
 }
@@ -313,7 +313,7 @@ export default function DashboardPage() {
   const droneCount = drones.length;
   const offlineCount = drones.filter(d => d.status?.toLowerCase() === "offline").length;
 
-  const activeStatuses = ["flying", "scanning", "delivering", "returning"];
+  const activeStatuses = ["flying", "scanning", "delivering", "relaying"];
   const activeCount = drones.filter(d => activeStatuses.includes(d.status?.toLowerCase() || "")).length;
   const validDrones = droneCount - offlineCount;
   
@@ -643,7 +643,7 @@ export default function DashboardPage() {
                           acc[s] = (acc[s] || 0) + 1;
                           return acc;
                         }, {} as Record<string, number>)).map((entry, index) => {
-                          const colors: Record<string, string> = { "flying": T.blue, "scanning": T.blue, "delivering": T.blue, "charging": T.green, "offline": T.red, "returning": T.amber };
+                          const colors: Record<string, string> = { "flying": T.blue, "scanning": T.blue, "delivering": T.blue, "charging": T.green, "offline": T.red, "relaying": T.amber };
                           return <Cell key={`cell-${index}`} fill={colors[entry[0]] || T.textDim} />;
                         })}
                       </Pie>
@@ -659,7 +659,7 @@ export default function DashboardPage() {
                       acc[s] = (acc[s] || 0) + 1;
                       return acc;
                     }, {} as Record<string, number>)).map(([name]) => {
-                      const colors: Record<string, string> = { "flying": T.blue, "scanning": T.blue, "delivering": T.blue, "charging": T.green, "offline": T.red, "returning": T.amber };
+                      const colors: Record<string, string> = { "flying": T.blue, "scanning": T.blue, "delivering": T.blue, "charging": T.green, "offline": T.red, "relaying": T.amber };
                       return (
                         <div key={name} className="flex items-center gap-1.5 text-[9px] text-slate-400 capitalize">
                           <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colors[name] || T.textDim }} />

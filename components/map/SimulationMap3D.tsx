@@ -66,7 +66,7 @@ interface Props {
 function droneColor(status: string): Color4 {
   if (status === "charging") return [34, 197, 94, 230];
   if (status === "offline") return [239, 68, 68, 200];
-  if (status === "returning") return [245, 158, 11, 230];
+  if (status === "relaying") return [245, 158, 11, 230];
   return [61, 158, 228, 240];
 }
 
@@ -75,28 +75,35 @@ function droneGlowColor(status: string): Color4 {
   return [r, g, b, 45];
 }
 
+function survivorConditionKey(condition: string | null | undefined): string {
+  return (condition ?? "").trim().toLowerCase();
+}
+
 function survivorFillColor(s: Survivor, pulse: number): Color4 {
   if (s.rescued) return [125, 211, 252, 230]; // Sky 300
   if (!s.detected) return [151, 163, 184, 255]; // Slate 400
-  
-  if (s.condition === "critical") return pulse ? [255, 60, 60, 255] : [239, 68, 68, 220]; // Red 500
-  if (s.condition === "moderate") return [245, 158, 11, 240]; // Amber 500
-  if (s.condition === "stable") return [34, 197, 94, 240]; // Emerald 500
+
+  const condition = survivorConditionKey(s.condition);
+  if (condition === "critical") return pulse ? [255, 60, 60, 255] : [239, 68, 68, 220]; // Red 500
+  if (condition === "moderate") return [245, 158, 11, 240]; // Amber 500
+  if (condition === "stable") return [34, 197, 94, 240]; // Emerald 500
   return [100, 116, 139, 220]; // Default Slate
 }
 
 function survivorLineColor(s: Survivor): Color4 {
   if (s.rescued) return [186, 230, 253, 255];
   if (!s.detected) return [148, 163, 184, 180];
-  
-  if (s.condition === "critical") return [255, 100, 100, 255];
-  if (s.condition === "moderate") return [251, 191, 36, 255]; // Amber 400
+
+  const condition = survivorConditionKey(s.condition);
+  if (condition === "critical") return [255, 100, 100, 255];
+  if (condition === "moderate") return [251, 191, 36, 255]; // Amber 400
   return [74, 222, 128, 220]; // Emerald 400
 }
 
 function survivorLabelColor(s: Survivor): Color4 {
-  if (s.condition === "critical") return [255, 130, 130, 220];
-  if (s.condition === "moderate") return [252, 193, 60, 220];
+  const condition = survivorConditionKey(s.condition);
+  if (condition === "critical") return [255, 130, 130, 220];
+  if (condition === "moderate") return [252, 193, 60, 220];
   return [100, 230, 140, 220];
 }
 
@@ -345,7 +352,7 @@ export default function SimulationMap3D({
       radiusMinPixels: 20,
       radiusMaxPixels: 100,
       getFillColor: (s) =>
-        s.condition === "critical"
+        survivorConditionKey(s.condition) === "critical"
           ? [239, 68, 68, pulse ? 80 : 50]
           : [245, 158, 11, 60],
       filled: true,
@@ -623,10 +630,11 @@ function DronePopup({ drone }: { drone: Drone }) {
 }
 
 function SurvivorPopup({ survivor }: { survivor: Survivor }) {
+  const survivorCondition = survivorConditionKey(survivor.condition);
   const condColor =
-    survivor.condition === "critical"
+    survivorCondition === "critical"
       ? "text-red-400"
-      : survivor.condition === "moderate"
+      : survivorCondition === "moderate"
         ? "text-amber-400"
         : "text-emerald-400";
 
@@ -636,7 +644,7 @@ function SurvivorPopup({ survivor }: { survivor: Survivor }) {
         {survivor.survivor_id.replace("_", " ").toUpperCase()}
       </p>
       <div className="space-y-1.5 text-xs">
-        <Row label="Condition" value={survivor.condition.toUpperCase()} valueClass={condColor} />
+        <Row label="Condition" value={survivorCondition.toUpperCase() || "UNKNOWN"} valueClass={condColor} />
         <Row
           label="Detected"
           value={survivor.detected ? "YES" : "NO"}
