@@ -94,12 +94,17 @@ function droneColor(status: string): string {
   return "text-slate-400";
 }
 
+function normalizeSurvivorCondition(condition: string | null | undefined): string {
+  return (condition ?? "").trim().toLowerCase();
+}
+
 function survivorColor(s: Survivor): string {
   if (s.rescued) return "text-sky-300";
   if (!s.detected) return "text-slate-400";
-  if (s.condition === "critical") return "text-red-500";
-  if (s.condition === "moderate") return "text-amber-500";
-  if (s.condition === "stable") return "text-emerald-500";
+  const condition = normalizeSurvivorCondition(s.condition);
+  if (condition === "critical") return "text-red-500";
+  if (condition === "moderate") return "text-amber-500";
+  if (condition === "stable") return "text-emerald-500";
   return "text-slate-400";
 }
 
@@ -728,8 +733,8 @@ export default function TacticalPage() {
                       <div className="space-y-1.5 text-xs">
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-slate-400">Condition</span>
-                          <span className={selectedMapItem.data.condition === "critical" ? "text-red-400" : selectedMapItem.data.condition === "moderate" ? "text-amber-400" : "text-emerald-400"}>
-                            {selectedMapItem.data.condition.toUpperCase()}
+                          <span className={normalizeSurvivorCondition(selectedMapItem.data.condition) === "critical" ? "text-red-400" : normalizeSurvivorCondition(selectedMapItem.data.condition) === "moderate" ? "text-amber-400" : "text-emerald-400"}>
+                            {normalizeSurvivorCondition(selectedMapItem.data.condition).toUpperCase() || "UNKNOWN"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between gap-3">
