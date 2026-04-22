@@ -205,6 +205,41 @@ export default function DashboardPage() {
     });
   }, []);
 
+  // ── Connection fallback state ──
+  const [isLlamaFallback, setIsLlamaFallback] = useState(false);
+  const [lostDuration, setLostDuration] = useState(0);
+
+  useEffect(() => {
+    let timer: number | undefined;
+    if (isLlamaFallback) {
+      timer = window.setInterval(() => {
+        setLostDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setLostDuration(0);
+    }
+    return () => window.clearInterval(timer);
+  }, [isLlamaFallback]);
+  
+  const formattedDuration = `${Math.floor(lostDuration / 60)}:${(lostDuration % 60).toString().padStart(2, '0')}`;
+
+  const handleToggleBaseLink = async () => {
+    const nextState = !isLlamaFallback;
+    setIsLlamaFallback(nextState);
+    
+    try {
+      // online_mode is true when we are NOT in Llama fallback
+      await api.missions.create({
+        scenarios: "default",
+        custom_prompt: "",
+        online_mode: !nextState
+      });
+      console.log(`Successfully configured mission connection status: online_mode = ${!nextState}`);
+    } catch (e) {
+      console.error("Failed to toggle model via API", e);
+    }
+  };
+
   // ── Telemetry mount + seed events ──
   const [simVisual, setSimVisual] = useState<WorldStreamSimVisual | null>(null);
   const [mesaBusy, setMesaBusy] = useState(false);
@@ -412,9 +447,30 @@ export default function DashboardPage() {
 
         {/* Right: badges + CTA */}
         <div className="flex flex-wrap items-center gap-2">
+          <Badge
+            className={
+              worldStreamLive
+                ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
+                : "border border-slate-500/40 bg-slate-500/10 text-slate-400"
+            }
+          >
+            <Wifi className="h-3 w-3" />{" "}
+            {worldStreamLive ? "WORLD SSE" : "WORLD · REST fallback"}
+          </Badge>
           <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
             <Target className="h-3 w-3" /> AI Allocation
           </Badge>
+          <Badge className="border border-emerald-400/40 bg-emerald-500/10 text-emerald-300">
+            <Wifi className="h-3 w-3" /> LIVE LINK
+          </Badge>
+          <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
+            <Target className="h-3 w-3" /> AI ALLOCATION
+          </Badge>
+          {apiError && (
+            <Badge className="border border-amber-400/40 bg-amber-500/10 text-amber-300">
+              <WifiOff className="h-3 w-3" /> DEMO DATA
+            </Badge>
+          )}
           {simVisual && worldStreamLive && (
             <Badge className="border border-violet-400/40 bg-violet-500/10 text-violet-200">
               <Radar className="h-3 w-3" /> Mesa Step {simVisual.mesa_step}
@@ -965,7 +1021,7 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="max-h-52 space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
+                <div className="max-h-85 space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
                   {events.filter(ev => ["HAZARD", "BATTERY", "SURVIVOR"].includes(ev.level)).map((ev) => (
                     <div key={ev.id} className="rounded-md border border-slate-700/70 bg-slate-900/40 p-2">
                       <div className="mb-1 flex items-center justify-between text-[11px]">
