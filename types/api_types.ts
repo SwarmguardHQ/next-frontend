@@ -209,6 +209,7 @@ export interface MissionsListResponse {
 export interface MissionRequest {
   scenarios: string;
   custom_prompt?: string;
+	online_mode: boolean;
 }
 
 export interface MissionStartedResponse {
