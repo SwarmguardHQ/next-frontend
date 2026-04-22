@@ -1,37 +1,29 @@
 import { Button } from "@/components/ui/button";
-import { SCENARIOS } from "@/lib/drone-scenarios";
-import { useDraggable } from "@dnd-kit/core";
+import { Flame, Cloud, Mountain, UserPlus, Droplets, Unlink, Skull } from "lucide-react";
+
+export const INCIDENT_EVENTS = [
+  { id: "fire", label: "Fire", icon: <Flame className="h-4 w-4" /> },
+  { id: "smoke", label: "Smoke", icon: <Cloud className="h-4 w-4" /> },
+  { id: "earthquake", label: "Earthquake", icon: <Mountain className="h-4 w-4" /> },
+  { id: "survivor", label: "Survivor", icon: <UserPlus className="h-4 w-4" /> },
+  { id: "flood", label: "Flood Zone", icon: <Droplets className="h-4 w-4" /> },
+  { id: "collapse", label: "Collapse", icon: <Unlink className="h-4 w-4" /> },
+  { id: "biohazard", label: "Biohazard", icon: <Skull className="h-4 w-4" /> },
+];
 
 interface QuickCommandsProps {
   disabled: boolean;
-  onCommand: (label: string) => void;
+  onEventAction: (eventId: string) => void;
 }
 
-function DraggableCommandButton({ s, disabled, onCommand }: { s: { id: string; label: string; icon: React.ReactNode }; disabled: boolean; onCommand: (label: string) => void }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `command-${s.label}`,
-    data: { type: s.label, s },
-  });
-
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        zIndex: isDragging ? 50 : undefined,
-        opacity: isDragging ? 0 : 1,
-      }
-    : undefined;
-
+function EventButton({ s, disabled, onEventAction }: { s: typeof INCIDENT_EVENTS[0]; disabled: boolean; onEventAction: (id: string) => void }) {
   return (
     <Button
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
       variant="outline"
       size="sm"
       disabled={disabled}
-      onClick={() => onCommand(s.label)}
-      className="h-7 gap-1.5 border-slate-800 text-xs text-slate-500 hover:border-slate-600 hover:text-slate-800 cursor-grab"
+      onClick={() => onEventAction(s.id)}
+      className="h-7 gap-1.5 border-slate-800 text-xs text-slate-500 hover:border-slate-600 hover:text-slate-800"
     >
       {s.icon}
       {s.label}
@@ -39,19 +31,23 @@ function DraggableCommandButton({ s, disabled, onCommand }: { s: { id: string; l
   );
 }
 
-export function QuickCommands({ disabled, onCommand }: QuickCommandsProps) {
-  const scenarios = Object.values(SCENARIOS).filter((s) => s.id !== "unknown");
-
+export function QuickCommands({ disabled, onEventAction }: QuickCommandsProps) {
   return (
-    <div className="flex flex-wrap gap-2">
-      {scenarios.map((s) => (
-        <DraggableCommandButton
-          key={s.id}
-          s={s}
-          disabled={disabled}
-          onCommand={onCommand}
-        />
-      ))}
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+         <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Report Event:</span>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {INCIDENT_EVENTS.map((s) => (
+          <EventButton
+            key={s.id}
+            s={s}
+            disabled={disabled}
+            onEventAction={onEventAction}
+          />
+        ))}
+      </div>
     </div>
   );
 }

@@ -72,7 +72,8 @@ import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { classifyIntent, SCENARIOS } from "@/lib/drone-scenarios";
 import { CommandStatus, DroneScenario } from "@/types/drone";
 import { MissionsListResponse, ScenariosListResponse } from "@/types/api_types";
-import { QuickCommands } from "@/components/drone-command/quick-commands";
+import { QuickCommands, INCIDENT_EVENTS } from "@/components/drone-command/quick-commands";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import dynamic from "next/dynamic";
 import type { Drone, Survivor, WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
 import { useWorldStream } from "@/lib/useWorldStream";
@@ -108,10 +109,19 @@ function parseMapMetadata(gridText: string) {
     if (isNaN(y)) return;
     const content = parts[1];
 
-    for (let x = 0; x < content.length; x++) {
-      const char = content[x];
-      if (char === "C") chargingStations.push({ id: `CS-${x}-${y}`, x, y });
-      if (char === "D") supplyDepots.push({ id: `D-${x}-${y}`, x, y });
+    let strIndex = 0;
+    let gridX = 0;
+    while (strIndex < content.length) {
+      if (content.startsWith("CS", strIndex)) {
+        chargingStations.push({ id: `CS-${gridX}-${y}`, x: gridX, y });
+        strIndex += 2;
+      } else if (content.startsWith("DS", strIndex)) {
+        supplyDepots.push({ id: `D-${gridX}-${y}`, x: gridX, y });
+        strIndex += 2;
+      } else {
+        strIndex += 1;
+      }
+      gridX += 1;
     }
   });
   return { chargingStations, supplyDepots };
@@ -126,7 +136,7 @@ function droneColor(status: string): string {
   if (status === "charging") return "text-emerald-400";
   if (status === "offline") return "text-red-500";
   if (status === "relaying") return "text-amber-400";
-  if (status === "scanning" || status === "flying" ) return "text-sky-400";
+  if (status === "scanning" || status === "flying" || status === "delivering") return "text-sky-400";
   return "text-slate-400";
 }
 
@@ -166,6 +176,41 @@ export default function TacticalPage() {
   const [selectedMapPanelPos, setSelectedMapPanelPos] = useState<SelectedMapPanelPos>(null);
   const mapBodyRef = useRef<HTMLDivElement>(null);
   const tacticalIsoRef = useRef<TacticalIsoControls | null>(null);
+	const [eventModalOpen, setEventModalOpen] = useState(false);
+  const [pendingEvent, setPendingEvent] = useState<typeof INCIDENT_EVENTS[0] | null>(null);
+  const [eventCoords, setEventCoords] = useState<{ x: string, y: string }>({ x: "", y: "" });
+
+  const handleEventAction = (eventId: string) => {
+     const ev = INCIDENT_EVENTS.find(e => e.id === eventId);
+     if (ev) {
+         setPendingEvent(ev);
+         setEventCoords({ x: "", y: "" });
+         setEventModalOpen(true);
+     }
+  };
+
+  const submitEvent = async () => {
+      if (!pendingEvent || !eventCoords.x || !eventCoords.y) return;
+      const parsedX = parseInt(eventCoords.x, 10);
+      const parsedY = parseInt(eventCoords.y, 10);
+      
+      const insight = `There is a ${pendingEvent.label.toLowerCase()} at (${parsedX}, ${parsedY})`;
+      
+      setFeedback(`Reporting: ${insight}`);
+      try {
+          // Mock API Call endpoint blank
+          // await fetch('/api/report-insight', { method: 'POST', body: JSON.stringify({ insight }) });
+          console.log("Payload to endpoint:", JSON.stringify({ insight }));
+          setTimeout(() => setFeedback(`AI Agent analyzing Swarm response to: ${insight}`), 1000);
+          setTimeout(() => setFeedback(""), 5000);
+      } catch (err) {
+          console.error("Failed to report event", err);
+          setFeedback("Failed to reach agent endpoint.");
+      }
+      
+      setEventModalOpen(false);
+      setPendingEvent(null);
+  };
 
   const openSelectedMapItem = useCallback(
     (event: React.MouseEvent<HTMLElement>, item: NonNullable<SelectedMapItem>) => {
@@ -423,7 +468,7 @@ export default function TacticalPage() {
     if (!selectedScenario) return;
     try {
       setIsStarting(true);
-      const res = await api.missions.create({ scenarios: selectedScenario });
+      const res = await api.missions.create({ scenarios: selectedScenario, online_mode: true });
       setSelectedScenario("");
       if (res && res.mission_id) {
          setActiveMissionId(res.mission_id);
@@ -434,8 +479,7 @@ export default function TacticalPage() {
     }
   };
 
-  const executeCommand = useCallback(async (text: string, _target?: { x: number; y: number }) => {
-    void _target;
+  const executeCommand = useCallback(async (text: string, targetPosition?: { x: number, y: number }, targetDrone?: string) => {
     if (!text.trim() || cmdStatus === "executing" || cmdStatus === "processing") return;
     const scenarioId = classifyIntent(text);
     const scenario = SCENARIOS[scenarioId];
@@ -460,7 +504,7 @@ export default function TacticalPage() {
     setCmdStatus("done");
     setFeedback(`${scenario.label} — complete`);
     setTimeout(() => { setCmdStatus("idle"); setFeedback(""); }, 2500);
-  }, [cmdStatus]);
+  }, [cmdStatus, drones, selectedMapItem]);
 
   useEffect(() => {
     if (!isListening && transcript && cmdStatus === "idle") {
@@ -472,38 +516,6 @@ export default function TacticalPage() {
   const handleSend = () => { executeCommand(voiceText); setVoiceText(""); };
   const isCmdActive = cmdStatus === "executing" || cmdStatus === "processing";
   const sortedMissions = missionsData?.missions?.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()) ?? [];
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    const { type, s } = active.data.current ?? {};
-    if (type && s) setActiveDragItem({ type, s });
-  };
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    setActiveDragItem(null);
-    const { active, over } = event;
-    const translated = (event as { active?: { rect?: { current?: { translated?: { left: number; top: number } } } } })
-      .active?.rect?.current?.translated;
-    if (over && over.id === "map-drop-zone") {
-      const commandType = active.data.current?.type as string | undefined;
-      if (commandType && translated) {
-        let targetX = 0;
-        let targetY = 0;
-        const panelRect = mapBodyRef.current?.getBoundingClientRect();
-        if (panelRect) {
-          const relativeX = translated.left - panelRect.left;
-          const relativeY = translated.top - panelRect.top;
-          targetX = Math.round((relativeX / panelRect.width) * gridSize);
-          targetY = gridSize - Math.round((relativeY / panelRect.height) * gridSize);
-        }
-        await executeCommand(commandType, { x: targetX, y: targetY });
-      } else if (commandType) {
-        await executeCommand(commandType);
-      }
-    }
-  };
-
-  const { setNodeRef: mapDropRef } = useDroppable({ id: "map-drop-zone" });
 
   // ── Local UI helpers ────────────────────────────────────────────────────────
   function Stat({ label, value, color }: { label: string; value: number; color: string }) {
@@ -559,17 +571,16 @@ export default function TacticalPage() {
   }
 
   return (
-    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="fixed top-14 left-0 right-0 bottom-0 flex flex-col overflow-hidden bg-slate-950 font-mono text-muted-foreground">
+		<>
+		<div className="fixed top-16 left-0 right-0 bottom-0 flex flex-col overflow-hidden bg-background font-mono text-muted-foreground">
       {/* ---------- MAIN WORKSPACE ---------- */}
       <div className="relative min-h-0 flex-1 overflow-hidden">
 
           {/* ── Map Body (drop zone for quick-command drags) ── */}
           <div
-            ref={(el) => {
-              mapBodyRef.current = el;
-              mapDropRef(el);
-            }}
+            ref={(node) => {
+							if (mapBodyRef) (mapBodyRef as any).current = node;
+						}}
             className="absolute inset-0 z-0 flex flex-col bg-slate-950"
           >
             {/* Top stats bar */}
@@ -641,12 +652,12 @@ export default function TacticalPage() {
                           const isDepot = (infra.supplyDepots as MapInfraItem[]).some((d) => d.x === cell.x && d.y === cell.y);
                       const hasDrones = cellDrones.length > 0;
                       const hasSurvivors = cellSurvivors.length > 0;
-                          const sector = [
-                            { id: "sector_1", type: "School", x: 5, y: 2 },
-                            { id: "sector_2", type: "Industrial", x: 12, y: 12 },
-                            { id: "sector_3", type: "Residential", x: 2, y: 16 },
-                            { id: "sector_4", type: "Commercial", x: 14, y: 6 },
-                          ].find((s) => s.x === cell.x && s.y === cell.y);
+                      const sector = [
+                        { id: "sector_1", type: "School", x: 5, y: 2 },
+                        { id: "sector_2", type: "Industrial", x: 12, y: 12 },
+                        { id: "sector_3", type: "Residential", x: 2, y: 16 },
+                        { id: "sector_4", type: "Commercial", x: 14, y: 6 },
+                      ].find((s) => s.x === cell.x && s.y === cell.y);
 
                       const heatVal =
                         simHeat != null &&
@@ -1159,15 +1170,15 @@ export default function TacticalPage() {
               </div>
             </div>
 
-            {/* Quick Commands — draggable chips */}
-            <div className="space-y-3 border-t border-slate-800/50 pt-5">
-              <SectionLabel icon={<Target className="h-3 w-3 text-cyan-400" />}>Quick Commands</SectionLabel>
-              <div className="max-w-full opacity-90">
-                <QuickCommands
-                  disabled={isCmdActive}
-                  onCommand={(cmd) => { void executeCommand(cmd); }}
-                />
-               </div>
+
+						{/* Quick Commands */}
+            <div className="space-y-4 border-t border-white/10 pt-6">
+              <h3 className="text-xs font-semibold tracking-widest text-slate-300 uppercase flex items-center gap-2">
+                <Target className="w-4 h-4 text-red-500" /> Incident Reporting
+              </h3>
+              <div className="opacity-80 hover:opacity-100 transition-opacity">
+                <QuickCommands disabled={isCmdActive} onEventAction={handleEventAction} />
+              </div>
             </div>
 
             {/* Left panel footer */}
@@ -1415,22 +1426,59 @@ export default function TacticalPage() {
                   )}
                 </div>
               </div>
-               </div>
+              </div>
             </div>
             </div>
-    <DragOverlay>
-      {activeDragItem ? (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5 border-cyan-400 bg-cyan-950/60 text-xs text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.5)]"
-        >
-          {activeDragItem.s.icon} {activeDragItem.type}
-        </Button>
-      ) : null}
-    </DragOverlay>
-      </div>
-    </DndContext>
+						</div>
+
+				<Dialog open={eventModalOpen} onOpenChange={setEventModalOpen}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 pointer-events-auto sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex gap-2 items-center text-slate-100">
+              {pendingEvent?.icon} Report {pendingEvent?.label} Incident
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Agents will automatically re-allocate drone swarms based on this insight input.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label htmlFor="coord-x" className="text-xs text-slate-400 font-mono tracking-wider">Coordinate X</label>
+                <Input 
+                   id="coord-x" 
+                   type="number" 
+                   value={eventCoords.x} 
+                   onChange={(e) => setEventCoords({ ...eventCoords, x: e.target.value })} 
+                   placeholder="12" 
+                   className="bg-slate-950 border-slate-700 text-slate-100" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="coord-y" className="text-xs text-slate-400 font-mono tracking-wider">Coordinate Y</label>
+                <Input 
+                   id="coord-y" 
+                   type="number" 
+                   value={eventCoords.y} 
+                   onChange={(e) => setEventCoords({ ...eventCoords, y: e.target.value })} 
+                   placeholder="2" 
+                   className="bg-slate-950 border-slate-700 text-slate-100" 
+                />
+              </div>
+            </div>
+            <div className="mt-2 p-3 bg-red-950/20 border border-red-900/50 rounded-md font-mono text-sm text-red-200/80">
+              &#123;"insight": "There is a {pendingEvent?.label.toLowerCase()} at ({eventCoords.x || "0"}, {eventCoords.y || "0"})"&#125;
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEventModalOpen(false)} className="border-slate-700 text-slate-400 hover:text-slate-100 hover:bg-slate-800">Cancel</Button>
+            <Button onClick={submitEvent} className="bg-red-600 hover:bg-red-500 text-white">Broadcast Insight</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      
+			</>
   );
 }
 
