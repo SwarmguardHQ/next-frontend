@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DeckGL from "@deck.gl/react";
-import { ScatterplotLayer, TextLayer, PathLayer, ColumnLayer, IconLayer } from "@deck.gl/layers";
+import { ScatterplotLayer, TextLayer, PathLayer, ColumnLayer, IconLayer, PolygonLayer } from "@deck.gl/layers";
 import type { PickingInfo } from "@deck.gl/core";
 import Map, { NavigationControl } from "react-map-gl/mapbox";
 import type { Drone, Survivor } from "@/types/api_types";
+import { cn } from "@/lib/utils";
+import { TACTICAL_SECTORS, type TacticalSector } from "@/lib/tacticalSectors";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
@@ -139,6 +141,7 @@ const BUILDING_LAYER_SPEC = {
   },
 };
 
+
 export default function SimulationMap3D({
   drones,
   survivors,
@@ -215,6 +218,93 @@ export default function SimulationMap3D({
       widthMinPixels: 0.5,
       capRounded: true,
       jointRounded: true,
+    }),
+
+    // ── Sector zones: coloured polygon fill (3×3 cell footprint) ──────────────
+    new PolygonLayer<TacticalSector>({
+      id: "sector-fill",
+      data: TACTICAL_SECTORS,
+      getPolygon: (d) => {
+        const half = 1.5 * CELL_DEG;
+        const [lng, lat] = toCoord(d.x, d.y);
+        return [
+          [lng - half, lat - half],
+          [lng + half, lat - half],
+          [lng + half, lat + half],
+          [lng - half, lat + half],
+        ] as [number, number][];
+      },
+      getFillColor: (d) => [d.rgba[0], d.rgba[1], d.rgba[2], 22] as Color4,
+      getLineColor: (d) => [d.rgba[0], d.rgba[1], d.rgba[2], 180] as Color4,
+      lineWidthMinPixels: 2,
+      filled: true,
+      stroked: true,
+      extruded: false,
+      pickable: false,
+      visible: zoom > 13.5,
+    }),
+
+    // ── Sector landmark columns per type (split into 4 layers for distinct shapes)
+    ...TACTICAL_SECTORS.map((s) => new ColumnLayer<TacticalSector>({
+      id: `sector-col-${s.id}`,
+      data: [s],
+      getPosition: (d) => toCoord(d.x, d.y),
+      diskResolution:
+        s.type === "School"      ? 4    // square
+        : s.type === "Industrial"  ? 6  // hexagon
+        : s.type === "Residential" ? 5  // pentagon
+        : 8,                            // octagon (Commercial)
+      radius: 18,
+      extruded: true,
+      getElevation: (_d) =>
+        s.type === "Commercial"  ? 55
+        : s.type === "Industrial"  ? 42
+        : s.type === "School"      ? 30
+        : 28,
+      getFillColor: (_d) => [s.rgba[0], s.rgba[1], s.rgba[2], 210] as Color4,
+      getLineColor: (_d) => [s.rgba[0], s.rgba[1], s.rgba[2], 255] as Color4,
+      lineWidthMinPixels: 1,
+      pickable: false,
+      visible: zoom > 13.5,
+    })),
+
+    // ── Sector ID badge (icon + id) ───────────────────────────────────────────
+    new TextLayer<TacticalSector>({
+      id: "sector-id-labels",
+      data: TACTICAL_SECTORS,
+      getPosition: (d) => toCoord(d.x, d.y),
+      getText: (d) => `${d.icon} ${d.id}`,
+      getSize: 15,
+      getColor: (d) => [d.rgba[0], d.rgba[1], d.rgba[2], 255] as Color4,
+      getTextAnchor: "middle",
+      getAlignmentBaseline: "center",
+      visible: zoom > 13.5,
+      getPixelOffset: [0, -14],
+      fontFamily: "Barlow Condensed, sans-serif",
+      fontWeight: 900,
+      billboard: true,
+      sizeUnits: "pixels",
+      background: true,
+      getBackgroundColor: [2, 6, 20, 220] as Color4,
+      backgroundPadding: [8, 4, 8, 4],
+    }),
+
+    // ── Sector type sub-label ─────────────────────────────────────────────────
+    new TextLayer<TacticalSector>({
+      id: "sector-type-labels",
+      data: TACTICAL_SECTORS,
+      getPosition: (d) => toCoord(d.x, d.y),
+      getText: (d) => d.type.toUpperCase(),
+      getSize: 10,
+      getColor: (d) => [d.rgba[0], d.rgba[1], d.rgba[2], 200] as Color4,
+      getTextAnchor: "middle",
+      getAlignmentBaseline: "center",
+      visible: zoom > 14.5,
+      getPixelOffset: [0, 12],
+      fontFamily: "Barlow Condensed, sans-serif",
+      fontWeight: 700,
+      billboard: true,
+      sizeUnits: "pixels",
     }),
 
     ...(mesaHeatCells.length
@@ -493,8 +583,17 @@ export default function SimulationMap3D({
     );
   }
 
+  const criticalCount = survivors.filter((s) => s.condition === "critical" && !s.rescued).length;
+
   return (
     <div className="relative h-full min-h-[520px] w-full overflow-hidden rounded-md">
+      {/* HUD corner brackets */}
+      <div className="pointer-events-none absolute left-3  top-3    z-20 h-7 w-7 border-l-2 border-t-2 border-cyan-500/45" />
+      <div className="pointer-events-none absolute right-3 top-3    z-20 h-7 w-7 border-r-2 border-t-2 border-cyan-500/45" />
+      <div className="pointer-events-none absolute left-3  bottom-3 z-20 h-7 w-7 border-b-2 border-l-2 border-cyan-500/45" />
+      <div className="pointer-events-none absolute right-3 bottom-3 z-20 h-7 w-7 border-b-2 border-r-2 border-cyan-500/45" />
+      {/* Top scan line */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-linear-to-r from-transparent via-cyan-500/30 to-transparent" />
       <DeckGL
         initialViewState={INITIAL_VIEW}
         controller
@@ -518,16 +617,34 @@ export default function SimulationMap3D({
       </DeckGL>
 
       {/* HUD overlay — top left */}
-      <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-col gap-1.5">
-        <div className="rounded border border-slate-400/20 bg-slate-900/80 px-2.5 py-1 font-mono text-[9px] tracking-widest text-slate-300 backdrop-blur-sm uppercase">
-          MAPBOX SAT · DECK.GL v9 OVERLAY
+      <div className="pointer-events-none absolute left-5 top-5 z-10 flex flex-col gap-2">
+        {/* System label */}
+        <div className="rounded-md border border-cyan-500/30 bg-slate-950/92 px-3 py-1.5 font-mono text-[9px] tracking-[0.2em] text-cyan-400 backdrop-blur-sm uppercase shadow-lg">
+          SIREN · 3D Tactical · SAT
         </div>
-        <div className="rounded border border-sky-400/20 bg-slate-900/75 px-2.5 py-1 font-mono text-[9px] tracking-widest text-sky-300 backdrop-blur-sm uppercase">
-          ● {drones.filter((d) => d.status !== "offline").length}/{drones.length} DRONES ACTIVE
+        {/* Drone status */}
+        <div className="flex items-center gap-2 rounded-md border border-sky-500/35 bg-slate-950/90 px-3 py-1.5 font-mono backdrop-blur-sm shadow-md">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-400" />
+          <span className="text-[10px] font-bold tracking-widest text-sky-300 uppercase">
+            {drones.filter((d) => d.status !== "offline").length}/{drones.length} Drones Active
+          </span>
         </div>
-        <div className="rounded border border-amber-400/20 bg-slate-900/75 px-2.5 py-1 font-mono text-[9px] tracking-widest text-amber-300 backdrop-blur-sm uppercase">
-          SURV {survivors.filter((s) => s.detected).length} DETECTED
+        {/* Survivor status */}
+        <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-slate-950/90 px-3 py-1.5 font-mono backdrop-blur-sm shadow-md">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+          <span className="text-[10px] font-bold tracking-widest text-amber-300 uppercase">
+            {survivors.filter((s) => s.detected && !s.rescued).length} Detected · {survivors.filter((s) => s.rescued).length} Rescued
+          </span>
         </div>
+        {/* Critical alert (conditional) */}
+        {criticalCount > 0 && (
+          <div className="flex items-center gap-2 rounded-md border border-red-500/45 bg-red-950/70 px-3 py-1.5 font-mono backdrop-blur-sm shadow-md">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" />
+            <span className="text-[10px] font-bold tracking-widest text-red-300 uppercase">
+              {criticalCount} Critical Survivor{criticalCount !== 1 ? "s" : ""}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Click-to-inspect popup */}
@@ -541,7 +658,7 @@ export default function SimulationMap3D({
       )}
 
       {/* Navigation hint */}
-      <div className="pointer-events-none absolute bottom-2 right-3 z-10 font-mono text-[9px] tracking-wide text-slate-500">
+      <div className="pointer-events-none absolute bottom-6 right-5 z-10 rounded border border-slate-700/30 bg-slate-950/60 px-2.5 py-1 font-mono text-[8px] tracking-[0.15em] text-slate-600 backdrop-blur-sm uppercase">
         Drag · Scroll · Right-drag to orbit
       </div>
     </div>
@@ -556,31 +673,54 @@ interface PopupProps {
 }
 
 function InspectPopup({ selected, x, y, onClose }: PopupProps) {
-  const clampedX = Math.min(x + 12, (typeof window !== "undefined" ? window.innerWidth : 1200) - 230);
-  const clampedY = Math.min(y - 12, (typeof window !== "undefined" ? window.innerHeight : 800) - 220);
+  const clampedX = Math.min(x + 12, (typeof window !== "undefined" ? window.innerWidth : 1200) - 260);
+  const clampedY = Math.min(y - 12, (typeof window !== "undefined" ? window.innerHeight : 800) - 280);
+
+  const headerCls =
+    selected.kind === "drone"     ? "bg-sky-950/90 border-sky-800/50 text-sky-300"
+    : selected.kind === "survivor" ? "bg-amber-950/90 border-amber-800/50 text-amber-300"
+    : selected.kind === "charging" ? "bg-emerald-950/90 border-emerald-800/50 text-emerald-300"
+    :                                "bg-cyan-950/90 border-cyan-800/50 text-cyan-300";
+
+  const headerLabel =
+    selected.kind === "drone"
+      ? `Drone · ${selected.data.drone_id.replace(/^drone_/i, "").replace(/^DRONE_/i, "").toUpperCase()}`
+    : selected.kind === "survivor"
+      ? `Survivor · ${selected.data.survivor_id.split("_").pop()?.toUpperCase()}`
+    : selected.kind === "charging"
+      ? "Power Hub"
+      : "Supply Depot";
 
   return (
     <div
-      className="absolute z-20 w-56 rounded-md border border-sky-400/30 bg-slate-900/96 p-3 shadow-[0_4px_32px_rgba(0,0,0,0.8)] backdrop-blur-md"
+      className="absolute z-20 w-60 overflow-hidden rounded-xl border border-slate-700/50 bg-slate-900/96 shadow-[0_8px_40px_rgba(0,0,0,0.85)] backdrop-blur-md"
       style={{ left: clampedX, top: clampedY }}
     >
-      <button
-        type="button"
-        className="absolute right-2 top-2 text-slate-400 transition-colors hover:text-white"
-        onClick={onClose}
-      >
-        ✕
-      </button>
+      {/* Colored entity-type header */}
+      <div className={cn("flex items-center justify-between border-b px-3.5 py-2.5", headerCls)}>
+        <span className="font-mono text-[10px] font-bold uppercase tracking-widest">
+          {headerLabel}
+        </span>
+        <button
+          type="button"
+          className="ml-3 flex h-5 w-5 items-center justify-center rounded text-xs leading-none opacity-70 transition-colors hover:bg-white/10 hover:opacity-100"
+          onClick={onClose}
+        >
+          ✕
+        </button>
+      </div>
 
-      {selected.kind === "drone" ? (
-        <DronePopup drone={selected.data} />
-      ) : selected.kind === "survivor" ? (
-        <SurvivorPopup survivor={selected.data} />
-      ) : selected.kind === "charging" ? (
-        <ChargingStationPopup station={selected.data} />
-      ) : (
-        <SupplyDepotPopup depot={selected.data} />
-      )}
+      <div className="p-3.5">
+        {selected.kind === "drone" ? (
+          <DronePopup drone={selected.data} />
+        ) : selected.kind === "survivor" ? (
+          <SurvivorPopup survivor={selected.data} />
+        ) : selected.kind === "charging" ? (
+          <ChargingStationPopup station={selected.data} />
+        ) : (
+          <SupplyDepotPopup depot={selected.data} />
+        )}
+      </div>
     </div>
   );
 }
@@ -596,9 +736,6 @@ function DronePopup({ drone }: { drone: Drone }) {
 
   return (
     <>
-      <p className="mb-2.5 font-mono text-[11px] font-bold tracking-widest text-sky-300 uppercase">
-        {drone.drone_id.replace("_", " ").toUpperCase()}
-      </p>
       <div className="space-y-1.5 text-xs">
         <Row label="Status" value={drone.status.toUpperCase()} valueClass="text-white" />
         <Row label="Battery" value={`${drone.battery.toFixed(1)}%`} valueClass={batColor} />
@@ -632,9 +769,6 @@ function SurvivorPopup({ survivor }: { survivor: Survivor }) {
 
   return (
     <>
-      <p className="mb-2.5 font-mono text-[11px] font-bold tracking-widest text-amber-300 uppercase">
-        {survivor.survivor_id.replace("_", " ").toUpperCase()}
-      </p>
       <div className="space-y-1.5 text-xs">
         <Row label="Condition" value={survivor.condition.toUpperCase()} valueClass={condColor} />
         <Row
@@ -667,9 +801,6 @@ function SurvivorPopup({ survivor }: { survivor: Survivor }) {
 function ChargingStationPopup({ station }: { station: InfraItem }) {
   return (
     <>
-      <p className="mb-2.5 font-mono text-[11px] font-bold tracking-widest text-emerald-300 uppercase">
-        CHARGING STATION
-      </p>
       <div className="space-y-1.5 text-xs">
         <Row label="ID" value={station.id.toUpperCase()} valueClass="text-white" />
         <Row label="Type" value="POWER HUB" valueClass="text-emerald-300" />
@@ -682,9 +813,6 @@ function ChargingStationPopup({ station }: { station: InfraItem }) {
 function SupplyDepotPopup({ depot }: { depot: InfraItem }) {
   return (
     <>
-      <p className="mb-2.5 font-mono text-[11px] font-bold tracking-widest text-sky-300 uppercase">
-        SUPPLY DEPOT
-      </p>
       <div className="space-y-1.5 text-xs">
         <Row label="ID" value={depot.id.toUpperCase()} valueClass="text-white" />
         <Row label="Type" value="LOGISTICS NODE" valueClass="text-sky-300" />
