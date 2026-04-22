@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Play, Pause, RotateCcw, SkipForward,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +32,8 @@ type Status = "scanning" | "idle" | "recalled" | "charging" | "offline";
 
 interface Drone {
   id: number;
+  /** 0–4: vertical strip assignment (cols), spreads drones across the map */
+  sector: number;
   x: number; y: number;
   battery: number;
   status: Status;
@@ -50,6 +52,8 @@ interface Confirmed {
 
 interface Pending { x: number; y: number; scans: number; heat: number }
 
+type MissionReason = "coverage" | "survivors" | "both";
+
 interface Sim {
   step: number;
   startMs: number;
@@ -59,6 +63,8 @@ interface Sim {
   confirmed: Confirmed[];
   pending: Map<string, Pending>;
   coverage: number;
+  missionComplete: boolean;
+  missionReason?: MissionReason;
 }
 
 // ─── Engine ───────────────────────────────────────────────────────────────────
@@ -103,7 +109,6 @@ function bfs(fx: number, fy: number, tx: number, ty: number): [number, number][]
 }
 
 function nearestUnscanned(x: number, y: number, scanned: Set<string>): [number, number] | null {
-  // Spiral outward for better distribution
   let best: [number, number] | null = null;
   let bestD = Infinity;
   for (let cy = 0; cy < GRID; cy++) {
@@ -114,6 +119,31 @@ function nearestUnscanned(x: number, y: number, scanned: Set<string>): [number, 
     }
   }
   return best;
+}
+
+/** Vertical strips: drone i owns columns [i*stripW .. (i+1)*stripW - 1] */
+function sectorXBounds(sector: number): [number, number] {
+  const stripW = Math.ceil(GRID / N_DRONES);
+  const xMin = sector * stripW;
+  const xMax = Math.min(GRID - 1, (sector + 1) * stripW - 1);
+  return [xMin, xMax];
+}
+
+function nearestUnscannedInSector(
+  x: number, y: number, scanned: Set<string>, sector: number,
+): [number, number] | null {
+  const [xMin, xMax] = sectorXBounds(sector);
+  let best: [number, number] | null = null;
+  let bestD = Infinity;
+  for (let cy = 0; cy < GRID; cy++) {
+    for (let cx = xMin; cx <= xMax; cx++) {
+      if (scanned.has(`${cx},${cy}`)) continue;
+      const d = Math.abs(cx - x) + Math.abs(cy - y);
+      if (d < bestD) { bestD = d; best = [cx, cy]; }
+    }
+  }
+  if (best) return best;
+  return nearestUnscanned(x, y, scanned);
 }
 
 function initSim(): Sim {
@@ -129,7 +159,9 @@ function initSim(): Sim {
 
   const starts: [number, number][] = [[0,0],[19,0],[0,19],[19,19],[9,9]];
   const drones: Drone[] = starts.slice(0, N_DRONES).map((s, i) => ({
-    id: i, x: s[0], y: s[1],
+    id: i,
+    sector: i,
+    x: s[0], y: s[1],
     battery: 85 + Math.random() * 14,
     status: "idle",
     target: null, path: [], lastHeat: 0,
@@ -144,10 +176,13 @@ function initSim(): Sim {
     confirmed: [],
     pending: new Map(),
     coverage: 0,
+    missionComplete: false,
   };
 }
 
 function tickSim(prev: Sim): Sim {
+  if (prev.missionComplete) return prev;
+
   const drones: Drone[] = prev.drones.map(d => ({ ...d, path: [...d.path] }));
   const scanned = new Set(prev.scanned);
   const pending = new Map(prev.pending);
@@ -155,6 +190,10 @@ function tickSim(prev: Sim): Sim {
 
   for (const d of drones) {
     if (d.status === "offline") continue;
+
+    const occupied = new Set(
+      drones.filter(o => o.id !== d.id && o.status !== "offline").map(o => `${o.x},${o.y}`),
+    );
 
     // ── Charging ──
     if (d.status === "charging") {
@@ -180,37 +219,70 @@ function tickSim(prev: Sim): Sim {
       if (d.x === CHARGE_ZONE[0] && d.y === CHARGE_ZONE[1]) {
         d.status = "charging"; d.target = null; d.path = [];
       } else {
-        moveAlongPath(d, scanned, prev.heatmap, pending, confirmed);
+        moveAlongPath(d, scanned, prev.heatmap, pending, confirmed, occupied);
       }
       continue;
     }
 
-    // ── Pick next unscanned target ──
+    // ── Pick next unscanned target (prefer this drone's sector) ──
     if (!d.target || (d.x === d.target[0] && d.y === d.target[1])) {
-      const t = nearestUnscanned(d.x, d.y, scanned);
+      const t = nearestUnscannedInSector(d.x, d.y, scanned, d.sector);
       if (t) { d.target = t; d.path = bfs(d.x, d.y, t[0], t[1]); }
       else { d.status = "idle"; }
     }
 
     // ── Move + scan ──
     if (d.path.length) {
-      moveAlongPath(d, scanned, prev.heatmap, pending, confirmed);
+      moveAlongPath(d, scanned, prev.heatmap, pending, confirmed, occupied);
     } else {
       scanAround(d, scanned, prev.heatmap, pending, confirmed);
     }
   }
 
   const coverage = (scanned.size / (GRID * GRID)) * 100;
-  return { ...prev, step: prev.step + 1, drones, scanned, confirmed, pending, coverage };
+  const fullCoverage = scanned.size >= GRID * GRID;
+  const allSurvivors = confirmed.length >= N_SURVIVORS;
+  let missionComplete = false;
+  let missionReason: MissionReason | undefined;
+  if (fullCoverage && allSurvivors) {
+    missionComplete = true;
+    missionReason = "both";
+  } else if (fullCoverage) {
+    missionComplete = true;
+    missionReason = "coverage";
+  } else if (allSurvivors) {
+    missionComplete = true;
+    missionReason = "survivors";
+  }
+
+  return {
+    ...prev,
+    step: prev.step + 1,
+    drones,
+    scanned,
+    confirmed,
+    pending,
+    coverage,
+    missionComplete,
+    missionReason: missionReason ?? prev.missionReason,
+  };
 }
 
 function moveAlongPath(
   d: Drone, scanned: Set<string>, hmap: number[][],
   pending: Map<string, Pending>, confirmed: Confirmed[],
+  occupied: Set<string>,
 ) {
   if (!d.path.length) return;
-  const [nx, ny] = d.path.shift()!;
-  d.x = nx; d.y = ny;
+  const [nx, ny] = d.path[0];
+  const key = `${nx},${ny}`;
+  if (occupied.has(key)) {
+    scanAround(d, scanned, hmap, pending, confirmed);
+    return;
+  }
+  d.path.shift();
+  d.x = nx;
+  d.y = ny;
   d.status = "scanning";
   scanAround(d, scanned, hmap, pending, confirmed);
 }
@@ -295,6 +367,18 @@ function draw(canvas: HTMLCanvasElement, sim: Sim) {
   for (let i = 0; i <= GRID; i++) {
     ctx.beginPath(); ctx.moveTo(i * cw, 0); ctx.lineTo(i * cw, H); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, i * ch); ctx.lineTo(W, i * ch); ctx.stroke();
+  }
+
+  // Sector boundaries (vertical strips between drones)
+  const stripW = Math.ceil(GRID / N_DRONES);
+  ctx.strokeStyle = "rgba(88,166,255,0.12)";
+  ctx.lineWidth = 1;
+  for (let s = 1; s < N_DRONES; s++) {
+    const gx = s * stripW;
+    ctx.beginPath();
+    ctx.moveTo(gx * cw, 0);
+    ctx.lineTo(gx * cw, H);
+    ctx.stroke();
   }
 
   // Pending detections
@@ -397,6 +481,11 @@ export default function SimulationPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [playing, speedIdx, step]);
 
+  // Stop auto-run when mission ends
+  useEffect(() => {
+    if (sim.missionComplete && playing) setPlaying(false);
+  }, [sim.missionComplete, playing]);
+
   const reset = useCallback(() => {
     setPlaying(false);
     setSim(initSim());
@@ -404,6 +493,17 @@ export default function SimulationPage() {
 
   const elapsed = Math.round((Date.now() - sim.startMs) / 1000);
   const totalCells = GRID * GRID;
+  const stripW = Math.ceil(GRID / N_DRONES);
+  const missionDone = sim.missionComplete;
+
+  const reasonText =
+    sim.missionReason === "both"
+      ? "Full area scan and all thermal targets confirmed."
+      : sim.missionReason === "coverage"
+        ? "Every grid cell has been scanned at least once."
+        : sim.missionReason === "survivors"
+          ? `All ${N_SURVIVORS} survivor signatures were confirmed.`
+          : "";
 
   return (
     <div className="min-h-[calc(100dvh-3.5rem)] bg-[#0d1117] text-[#e6edf3]">
@@ -416,33 +516,76 @@ export default function SimulationPage() {
               SIREN Swarm Simulation
             </h1>
             <p className="mt-0.5 text-sm text-[#8b949e]">
-              Agent-based rescue model · {GRID}×{GRID} grid · {N_DRONES} drones · {N_SURVIVORS} survivors
+              Agent-based rescue model · {GRID}×{GRID} grid · {N_DRONES} drones ({stripW}-column sectors) ·{" "}
+              {N_SURVIVORS} survivors
             </p>
           </div>
           <span className={cn(
             "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs",
-            playing
+            missionDone
               ? "bg-[#1a2f1a] text-[#3fb950]"
-              : "bg-[#1c2128] text-[#8b949e]",
+              : playing
+                ? "bg-[#1a2f1a] text-[#3fb950]"
+                : "bg-[#1c2128] text-[#8b949e]",
           )}>
             <span className={cn(
               "h-1.5 w-1.5 rounded-full",
-              playing ? "bg-[#3fb950] animate-pulse" : "bg-[#8b949e]",
+              missionDone || playing ? "bg-[#3fb950]" : "bg-[#8b949e]",
+              playing && !missionDone && "animate-pulse",
             )} />
-            {playing ? "Running" : "Paused"}
+            {missionDone ? "Complete" : playing ? "Running" : "Paused"}
           </span>
         </div>
+
+        {/* Mission complete summary */}
+        {missionDone && (
+          <div className="mb-4 flex flex-wrap items-start gap-4 rounded-lg border border-[#388bfd66] bg-[#161b22] px-4 py-3">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#3fb950]" />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold text-[#e6edf3]">Mission complete</h2>
+              <p className="mt-1 text-xs text-[#8b949e]">{reasonText}</p>
+              <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-4">
+                <div>
+                  <dt className="text-[#8b949e]">Steps</dt>
+                  <dd className="font-mono text-[#e6edf3]">{sim.step}</dd>
+                </div>
+                <div>
+                  <dt className="text-[#8b949e]">Time</dt>
+                  <dd className="font-mono text-[#e6edf3]">{elapsed}s</dd>
+                </div>
+                <div>
+                  <dt className="text-[#8b949e]">Coverage</dt>
+                  <dd className="font-mono text-[#e6edf3]">{sim.coverage.toFixed(1)}%</dd>
+                </div>
+                <div>
+                  <dt className="text-[#8b949e]">Confirmed</dt>
+                  <dd className="font-mono text-[#3fb950]">{sim.confirmed.length}</dd>
+                </div>
+              </dl>
+            </div>
+            <button
+              type="button"
+              onClick={reset}
+              className="shrink-0 rounded-md border border-[#30363d] bg-[#21262d] px-3 py-1.5 text-xs font-medium text-[#c9d1d9] hover:bg-[#30363d]"
+            >
+              New run
+            </button>
+          </div>
+        )}
 
         {/* ── Toolbar ── */}
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-[#30363d] bg-[#161b22] px-3 py-2">
           {/* Play / Pause */}
           <button
             onClick={() => setPlaying(v => !v)}
+            disabled={missionDone}
             className={cn(
               "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              playing
-                ? "bg-[#21262d] text-[#d29922] hover:bg-[#30363d]"
-                : "bg-[#238636] text-white hover:bg-[#2ea043]",
+              missionDone
+                ? "cursor-not-allowed opacity-40"
+                : playing
+                  ? "bg-[#21262d] text-[#d29922] hover:bg-[#30363d]"
+                  : "bg-[#238636] text-white hover:bg-[#2ea043]",
             )}
           >
             {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
@@ -452,7 +595,7 @@ export default function SimulationPage() {
           {/* Step */}
           <button
             onClick={step}
-            disabled={playing}
+            disabled={playing || missionDone}
             className="flex items-center gap-1.5 rounded-md border border-[#30363d] bg-[#21262d] px-3 py-1.5 text-sm text-[#c9d1d9] hover:bg-[#30363d] disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
           >
             <SkipForward className="h-3.5 w-3.5" />
@@ -508,7 +651,8 @@ export default function SimulationPage() {
           <div className="overflow-hidden rounded-lg border border-[#30363d]">
             <div className="flex items-center justify-between border-b border-[#21262d] bg-[#161b22] px-3 py-2">
               <span className="text-xs text-[#8b949e]">Field view</span>
-              <div className="flex items-center gap-3 text-[11px] text-[#8b949e]">
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#8b949e]">
+                <span className="hidden sm:inline text-[#58a6ff]/80">Blue lines = sector splits</span>
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-[#3b82f6]" /> Drone
                 </span>
@@ -556,40 +700,47 @@ export default function SimulationPage() {
                 <thead>
                   <tr className="border-b border-[#21262d] bg-[#161b22]">
                     <th className="px-3 py-1.5 text-left font-medium text-[#8b949e]">#</th>
+                    <th className="px-3 py-1.5 text-left font-medium text-[#8b949e]">Sector</th>
                     <th className="px-3 py-1.5 text-left font-medium text-[#8b949e]">Status</th>
                     <th className="px-3 py-1.5 text-right font-medium text-[#8b949e]">Bat.</th>
                     <th className="px-3 py-1.5 text-right font-medium text-[#8b949e]">Pos</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#21262d]">
-                  {sim.drones.map((d) => (
-                    <tr key={d.id} className="bg-[#0d1117] hover:bg-[#161b22] transition-colors">
-                      <td className="px-3 py-2">
-                        <span
-                          className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                          style={{ backgroundColor: STATUS_COLOR[d.status] ?? "#475569" }}
-                        >
-                          {d.id}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 capitalize text-[#c9d1d9]">
-                        {d.status}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <span className={cn(
-                          "font-mono",
-                          d.battery > 50 ? "text-[#3fb950]"
-                            : d.battery > 20 ? "text-[#d29922]"
-                              : "text-[#f85149]",
-                        )}>
-                          {Math.round(d.battery)}%
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono text-[#8b949e]">
-                        {d.x},{d.y}
-                      </td>
-                    </tr>
-                  ))}
+                  {sim.drones.map((d) => {
+                    const [sx0, sx1] = sectorXBounds(d.sector);
+                    return (
+                      <tr key={d.id} className="bg-[#0d1117] hover:bg-[#161b22] transition-colors">
+                        <td className="px-3 py-2">
+                          <span
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                            style={{ backgroundColor: STATUS_COLOR[d.status] ?? "#475569" }}
+                          >
+                            {d.id}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 font-mono text-[10px] text-[#8b949e]" title="Primary sweep columns">
+                          x {sx0}–{sx1}
+                        </td>
+                        <td className="px-3 py-2 capitalize text-[#c9d1d9]">
+                          {d.status}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <span className={cn(
+                            "font-mono",
+                            d.battery > 50 ? "text-[#3fb950]"
+                              : d.battery > 20 ? "text-[#d29922]"
+                                : "text-[#f85149]",
+                          )}>
+                            {Math.round(d.battery)}%
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-[#8b949e]">
+                          {d.x},{d.y}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

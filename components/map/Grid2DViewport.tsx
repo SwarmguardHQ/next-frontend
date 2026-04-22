@@ -132,7 +132,11 @@ export function Grid2DViewport({
 
       if (!rotateMode && !panMode) return;
       e.preventDefault();
-      (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+      try {
+        (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
       setSnapTransition(false);
       if (rotateMode) {
         setDrag({
@@ -178,7 +182,7 @@ export function Grid2DViewport({
     if (isoScene) return;
     if (drag?.pointerId !== e.pointerId) return;
     try {
-      (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
+      (e.target as Element).releasePointerCapture(e.pointerId);
     } catch {
       /* ignore */
     }

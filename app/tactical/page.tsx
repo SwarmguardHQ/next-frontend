@@ -25,7 +25,38 @@ type SelectedMapItem =
 
 type SelectedMapPanelPos = { x: number; y: number } | null;
 
-import { Mic, MicOff, Settings, User, Bell, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, History, ShieldAlert, Cpu, Radar, Send, Play, Terminal, Target, AlertOctagon, CheckCircle2, Clock, AlertCircle, Map as MapIcon, Wifi } from "lucide-react";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  useDroppable,
+} from "@dnd-kit/core";
+import {
+  Mic,
+  MicOff,
+  Settings,
+  User,
+  Bell,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  History,
+  ShieldAlert,
+  Cpu,
+  Radar,
+  Send,
+  Play,
+  Terminal,
+  Target,
+  AlertOctagon,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Map as MapIcon,
+  Wifi,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -72,10 +103,19 @@ function parseMapMetadata(gridText: string) {
     if (isNaN(y)) return;
     const content = parts[1];
 
-    for (let x = 0; x < content.length; x++) {
-      const char = content[x];
-      if (char === "C") chargingStations.push({ id: `CS-${x}-${y}`, x, y });
-      if (char === "D") supplyDepots.push({ id: `D-${x}-${y}`, x, y });
+    let strIndex = 0;
+    let gridX = 0;
+    while (strIndex < content.length) {
+      if (content.startsWith("CS", strIndex)) {
+        chargingStations.push({ id: `CS-${gridX}-${y}`, x: gridX, y });
+        strIndex += 2;
+      } else if (content.startsWith("DS", strIndex)) {
+        supplyDepots.push({ id: `D-${gridX}-${y}`, x: gridX, y });
+        strIndex += 2;
+      } else {
+        strIndex += 1;
+      }
+      gridX += 1;
     }
   });
   return { chargingStations, supplyDepots };
@@ -195,6 +235,7 @@ export default function TacticalPage() {
   const [scenariosData, setScenariosData] = useState<ScenariosListResponse | null>(null);
   const [selectedScenario, setSelectedScenario] = useState("");
   const [isStarting, setIsStarting] = useState(false);
+  const [activeDragItem, setActiveDragItem] = useState<{type: string, s: any} | null>(null);
 
   const { isListening, transcript, interim, supported, start, stop } = useSpeechRecognition();
   const [voiceText, setVoiceText] = useState("");
@@ -359,7 +400,7 @@ export default function TacticalPage() {
     }
   };
 
-  const executeCommand = useCallback(async (text: string) => {
+  const executeCommand = useCallback(async (text: string, targetPosition?: { x: number, y: number }, targetDrone?: string) => {
     if (!text.trim() || cmdStatus === "executing" || cmdStatus === "processing") return;
     const scenarioId = classifyIntent(text);
     const scenario = SCENARIOS[scenarioId];
@@ -375,16 +416,61 @@ export default function TacticalPage() {
     }
 
     setCmdStatus("executing");
+
+    let target: string | undefined =
+      targetDrone ||
+      (selectedMapItem?.kind === "drone" ? selectedMapItem.data.drone_id : undefined) ||
+      drones[0]?.drone_id;
+    let originalPosition = { x: 0, y: 0 };
+
+    if (targetPosition && target) {
+      setFeedback(
+        `[DEMO] Sending ${target} to (${targetPosition.x}, ${targetPosition.y})`,
+      );
+      setDrones((prevDrones) => {
+        const newDrones = [...prevDrones];
+        const idx = newDrones.findIndex((d) => d.drone_id === target);
+        if (idx !== -1) {
+          originalPosition = { ...newDrones[idx].position };
+          newDrones[idx] = {
+            ...newDrones[idx],
+            status: "flying",
+            position: { x: targetPosition.x, y: targetPosition.y },
+          };
+        }
+        return newDrones;
+      });
+    } else {
     setFeedback(`Executing: ${scenario.label}`);
+    }
     
     for (let i = 0; i < scenario.steps.length; i++) {
+      if (targetPosition) {
+         setFeedback(`[DEMO] ${target} is performing: ${scenario.steps[i]}`);
+      }
       await new Promise((r) => setTimeout(r, 700 + Math.random() * 400));
+    }
+
+    // Revert demo position
+    if (targetPosition && target) {
+      setDrones((prevDrones) => {
+         const newDrones = [...prevDrones];
+         const idx = newDrones.findIndex((d) => d.drone_id === target);
+         if (idx !== -1) {
+            newDrones[idx] = { 
+               ...newDrones[idx], 
+               status: 'idle',
+               position: originalPosition 
+            };
+         }
+         return newDrones;
+       });
     }
 
     setCmdStatus("done");
     setFeedback(`${scenario.label} — complete`);
     setTimeout(() => { setCmdStatus("idle"); setFeedback(""); }, 2500);
-  }, [cmdStatus]);
+  }, [cmdStatus, drones, selectedMapItem]);
 
   useEffect(() => {
     if (!isListening && transcript && cmdStatus === "idle") {
@@ -397,9 +483,45 @@ export default function TacticalPage() {
   const isCmdActive = cmdStatus === "executing" || cmdStatus === "processing";
   const sortedMissions = missionsData?.missions?.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()) ?? [];
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const { type, s } = active.data.current ?? {};
+    if (type && s) setActiveDragItem({ type, s });
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveDragItem(null);
+    const { active, over } = event;
+    const translated = (event as { active?: { rect?: { current?: { translated?: { left: number; top: number } } } } })
+      .active?.rect?.current?.translated;
+    if (over && over.id === "map-drop-zone") {
+      const commandType = active.data.current?.type as string | undefined;
+      if (commandType && translated) {
+        let targetX = 0;
+        let targetY = 0;
+        const panelRect = mapBodyRef.current?.getBoundingClientRect();
+
+        if (panelRect) {
+          const relativeX = translated.left - panelRect.left;
+          const relativeY = translated.top - panelRect.top;
+          targetX = Math.round((relativeX / panelRect.width) * gridSize);
+          targetY = gridSize - Math.round((relativeY / panelRect.height) * gridSize);
+        }
+
+        await executeCommand(commandType, { x: targetX, y: targetY });
+      } else if (commandType) {
+        await executeCommand(commandType);
+      }
+    }
+  };
+
+  const { setNodeRef: mapDropRef } = useDroppable({
+    id: "map-drop-zone",
+  });
+
   // ── Local UI helpers (render helpers) ────────────────────────────────────────
   function Stat({ label, value, color }: { label: string; value: number; color: string }) {
-    return (
+  return (
       <div className="flex flex-col items-center gap-0.5">
         <span className={cn("text-sm font-bold tabular-nums leading-none", color)}>{value}</span>
         <span className="text-[8px] uppercase tracking-widest text-slate-600">{label}</span>
@@ -412,7 +534,7 @@ export default function TacticalPage() {
       <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">
         {icon}
         {children}
-      </div>
+                </div>
     );
   }
 
@@ -421,7 +543,7 @@ export default function TacticalPage() {
       <div className="flex items-center justify-between gap-3 text-[11px]">
         <span className="text-slate-500">{label}</span>
         <span className={cn("text-slate-200", mono && "font-mono text-slate-400")}>{value}</span>
-      </div>
+              </div>
     );
   }
 
@@ -450,30 +572,51 @@ export default function TacticalPage() {
     );
   }
 
-  return (
-    <div className="fixed top-14 left-0 right-0 bottom-0 flex flex-col overflow-hidden bg-slate-950 font-mono text-muted-foreground">
+                      return (
+    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <div className="fixed top-14 left-0 right-0 bottom-0 flex flex-col overflow-hidden bg-slate-950 font-mono text-muted-foreground">
       {/* ---------- MAIN WORKSPACE ---------- */}
       <div className="relative min-h-0 flex-1 overflow-hidden">
         
-          {/* ── Map Body ── */}
-          <div ref={mapBodyRef} className="absolute inset-0 z-0 flex flex-col bg-slate-950">
-
-            {/* Top stats bar (no toggle here) */}
+          {/* ── Map Body (drop zone for quick-command drags) ── */}
+          <div
+            ref={(el) => {
+              mapBodyRef.current = el;
+              mapDropRef(el);
+            }}
+            className="absolute inset-0 z-0 flex flex-col bg-slate-950"
+          >
+            {/* Top stats bar */}
             <div className="relative z-30 flex shrink-0 items-center justify-end border-b border-slate-800/50 bg-slate-950/80 px-4 py-1.5 backdrop-blur-sm">
               <div className="hidden items-center gap-4 sm:flex">
-                <Stat label="Drones"   value={drones.length}                                                        color="text-cyan-400"    />
-                <Stat label="Detected" value={survivors.filter(s => s.detected && !s.rescued).length}               color="text-amber-400"   />
-                <Stat label="Rescued"  value={survivors.filter(s => s.rescued).length}                              color="text-emerald-400" />
-                <Stat label="Critical" value={survivors.filter(s => s.condition === "critical" && !s.rescued).length} color="text-red-400"  />
-                <span className={cn(
-                  "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest",
-                  worldStreamLive ? "text-emerald-400" : "text-amber-400",
-                )}>
-                  <span className={cn("h-1.5 w-1.5 rounded-full", worldStreamLive ? "bg-emerald-400 animate-pulse" : "bg-amber-400")} />
+                <Stat label="Drones" value={drones.length} color="text-cyan-400" />
+                <Stat
+                  label="Detected"
+                  value={survivors.filter((s) => s.detected && !s.rescued).length}
+                  color="text-amber-400"
+                />
+                <Stat label="Rescued" value={survivors.filter((s) => s.rescued).length} color="text-emerald-400" />
+                <Stat
+                  label="Critical"
+                  value={survivors.filter((s) => s.condition === "critical" && !s.rescued).length}
+                  color="text-red-400"
+                />
+                <span
+                  className={cn(
+                    "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest",
+                    worldStreamLive ? "text-emerald-400" : "text-amber-400",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "h-1.5 w-1.5 rounded-full",
+                      worldStreamLive ? "bg-emerald-400 animate-pulse" : "bg-amber-400",
+                    )}
+                  />
                   {worldStreamLive ? "Live" : "Fallback"}
                 </span>
-              </div>
-              </div>
+                              </div>
+                          </div>
 
             {/* Map canvas area */}
             <div className="relative min-h-0 flex-1">
@@ -546,7 +689,7 @@ export default function TacticalPage() {
                         {selectedMapItem.kind === "charging" && "Power Hub"}
                         {selectedMapItem.kind === "depot"    && "Logistics Node"}
                       </p>
-                    </div>
+                </div>
                     <button
                       type="button"
                       className="flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-700/60 hover:text-slate-200"
@@ -554,7 +697,7 @@ export default function TacticalPage() {
                     >
                       ✕
                     </button>
-                  </div>
+                </div>
 
                   <div className="space-y-2 p-3.5">
                     {selectedMapItem.kind === "drone" && (() => {
@@ -582,7 +725,7 @@ export default function TacticalPage() {
                             >
                               <Cpu className="h-3 w-3" /> Inspect Drone
                             </button>
-                          </div>
+                </div>
                         </>
                       );
                     })()}
@@ -621,17 +764,17 @@ export default function TacticalPage() {
                         <InfoRow label="Grid" value={`(${selectedMapItem.data.x}, ${selectedMapItem.data.y})`} mono />
                       </>
                     )}
-                  </div>
-                </div>
+              </div>
+            </div>
               )}
 
               {/* ── Map Legend (collapsible, bottom-left) ── */}
-              <div className={cn(
+        <div className={cn(
                 "absolute bottom-20 left-4 z-20 hidden flex-col overflow-hidden rounded-xl border border-slate-700/50 bg-slate-950/92 font-mono shadow-xl backdrop-blur-md transition-all duration-300 lg:flex",
                 legendOpen ? "w-auto" : "w-10",
-              )}>
+        )}>
                 {/* Toggle header */}
-                <button
+          <button 
                   type="button"
                   onClick={() => setLegendOpen(!legendOpen)}
                   className="flex w-full items-center gap-2 px-3 py-2.5 font-bold text-cyan-500 hover:text-cyan-300"
@@ -643,7 +786,7 @@ export default function TacticalPage() {
                   )}>
                     Legend
                   </span>
-                </button>
+          </button>
 
                 {/* Legend body */}
                 <div className={cn("overflow-hidden transition-all duration-300", legendOpen ? "max-h-[420px] pb-3" : "max-h-0")}>
@@ -780,7 +923,7 @@ export default function TacticalPage() {
           <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-track]:bg-transparent">
             {/* Panel header */}
             <div className="flex items-start justify-between">
-              <div>
+            <div>
                 <h2 className="text-sm font-bold uppercase tracking-widest text-slate-100">Mission Control</h2>
                 <p className="mt-0.5 text-[9px] uppercase tracking-[0.18em] text-slate-600">Op-ID · Alpha-9</p>
               </div>
@@ -805,15 +948,15 @@ export default function TacticalPage() {
             {/* MesaSimPanel only shown when sim_visual data is actually available */}
             {simVisual && (
               <div className="rounded-xl border border-slate-800/50 bg-slate-900/50 p-3">
-                <MesaSimPanel
-                  variant="card"
-                  simVisual={simVisual}
-                  streamLive={worldStreamLive}
-                  mesaBusy={mesaBusy}
-                  onMesaStep={handleMesaStep}
+              <MesaSimPanel
+                variant="card"
+                simVisual={simVisual}
+                streamLive={worldStreamLive}
+                mesaBusy={mesaBusy}
+                onMesaStep={handleMesaStep}
                   className="border-t-0! pt-0!"
-                />
-              </div>
+              />
+            </div>
             )}
 
             {/* Deploy Scenario */}
@@ -890,19 +1033,31 @@ export default function TacticalPage() {
                       {feedback}
                     </p>
                   )}
-                </div>
               </div>
             </div>
 
-          {/* Left panel footer */}
-          <div className="shrink-0 flex items-center justify-between border-t border-slate-800/50 px-4 py-2 text-[8px] uppercase tracking-widest text-slate-700">
-            <span>© 2025 SIREN Tactical</span>
-            <span className="flex items-center gap-1.5 text-emerald-600">
-              <span className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
-              Link Stable
-              </span>
+            {/* Quick Commands — draggable chips (see @dnd-kit on map body) */}
+            <div className="space-y-3 border-t border-slate-800/50 pt-5">
+              <SectionLabel icon={<Target className="h-3 w-3 text-cyan-400" />}>Quick Commands</SectionLabel>
+              <div className="max-w-full opacity-90">
+                <QuickCommands
+                  disabled={isCmdActive}
+                  onCommand={(cmd) => {
+                    void executeCommand(cmd);
+                  }}
+                />
+               </div>
             </div>
 
+            {/* Left panel footer */}
+            <div className="mt-auto flex shrink-0 items-center justify-between border-t border-slate-800/50 pt-3 text-[8px] uppercase tracking-widest text-slate-700">
+              <span>© 2025 SIREN Tactical</span>
+              <span className="flex items-center gap-1.5 text-emerald-600">
+                <span className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
+                Link Stable
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* ── RIGHT PANEL PULL TAB (visible when collapsed) ── */}
@@ -922,24 +1077,24 @@ export default function TacticalPage() {
           "absolute right-0 top-0 bottom-0 z-20 flex w-80 flex-col border-l border-slate-800/50 bg-slate-950/95 shadow-2xl backdrop-blur-xl transition-transform duration-300",
           rightOpen ? "translate-x-0" : "translate-x-full",
         )}>
-          <div className="flex h-full flex-col p-4 text-xs uppercase tracking-wider relative overflow-hidden">
+          <div className="relative flex h-full flex-col overflow-hidden p-4 text-xs uppercase tracking-wider">
             {/* Panel header */}
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex shrink-0 items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <button
+          <button 
                   onClick={() => setRightOpen(false)}
                   title="Collapse  [ ] ]"
                   className="rounded-lg border border-slate-700/40 bg-slate-900/60 p-1 text-slate-500 transition-colors hover:border-cyan-700/40 hover:text-cyan-400"
-                >
+          >
                   <ChevronRight className="h-3.5 w-3.5" />
-                </button>
+          </button>
                 <h2 className="text-sm font-bold uppercase tracking-widest text-slate-100">Mission Console</h2>
               </div>
               <span className="rounded-md border border-slate-700/50 bg-slate-900/60 px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest text-slate-500">v4.0.2</span>
             </div>
 
             {/* Active Sorties */}
-            <div className="mb-5">
+            <div className="mb-5 min-h-0 shrink-0">
               <SectionLabel icon={<Target className="h-3 w-3 text-cyan-400" />}>Active Sorties</SectionLabel>
               <div className="mt-2 overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/40">
                     <Table>
@@ -1019,8 +1174,8 @@ export default function TacticalPage() {
                           <span className={log.type === "error" ? "text-red-400" : log.type === "complete" ? "text-emerald-400 font-bold" : "text-slate-300"}>
                             {log.message || log.debrief || log.result_summary || "Event triggered"}
                           </span>
-                        </div>
-                      );
+                          </div>
+                        );
                     }
                     if (log.type === "step") {
                       return (
@@ -1028,7 +1183,7 @@ export default function TacticalPage() {
                           <div className="flex gap-2 font-medium">
                             <span className="shrink-0 text-slate-600">[{log.timestamp}]</span>
                             <span className="font-bold uppercase text-cyan-400">{log.tool || log.phase}</span>
-                          </div>
+                            </div>
                           {log.reasoning && <p className="mt-1 italic leading-relaxed text-slate-400">"{log.reasoning}"</p>}
                           {log.result_summary && <p className="mt-1 font-medium text-cyan-300">› {log.result_summary}</p>}
                         </div>
@@ -1045,13 +1200,25 @@ export default function TacticalPage() {
                     </div>
                   )}
                 </div>
-            </div>
-            
-          </div>
-        </div>
+              </div>
 
-      </div>
-    </div>
+               </div>
+            </div>
+
+            </div>
+          </div>
+    <DragOverlay>
+      {activeDragItem ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 border-cyan-400 bg-cyan-950/60 text-xs text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.5)]"
+        >
+          {activeDragItem.s.icon} {activeDragItem.type}
+        </Button>
+      ) : null}
+    </DragOverlay>
+    </DndContext>
   );
 }
 
