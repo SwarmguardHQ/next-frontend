@@ -62,6 +62,7 @@ import {
   Triangle,
   Thermometer,
   ScanLine,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -127,17 +128,22 @@ function clamp(value: number, min: number, max: number): number {
 function droneColor(status: string): string {
   if (status === "charging") return "text-emerald-400";
   if (status === "offline") return "text-red-500";
-  if (status === "returning") return "text-amber-400";
-  if (status === "scanning" || status === "flying" || status === "delivering") return "text-sky-400";
+  if (status === "relaying") return "text-amber-400";
+  if (status === "scanning" || status === "flying" ) return "text-sky-400";
   return "text-slate-400";
+}
+
+function normalizeSurvivorCondition(condition: string | null | undefined): string {
+  return (condition ?? "").trim().toLowerCase();
 }
 
 function survivorColor(s: Survivor): string {
   if (s.rescued) return "text-sky-300";
   if (!s.detected) return "text-slate-400";
-  if (s.condition === "critical") return "text-red-500";
-  if (s.condition === "moderate") return "text-amber-500";
-  if (s.condition === "stable") return "text-emerald-500";
+  const condition = normalizeSurvivorCondition(s.condition);
+  if (condition === "critical") return "text-red-500";
+  if (condition === "moderate") return "text-amber-500";
+  if (condition === "stable") return "text-emerald-500";
   return "text-slate-400";
 }
 
@@ -1314,14 +1320,109 @@ export default function TacticalPage() {
             {/* Panel header */}
             <div className="mb-4 flex shrink-0 items-center justify-between">
               <div className="flex items-center gap-1.5">
-          <button 
+                <button
                   onClick={() => setRightOpen(false)}
                   title="Collapse  [ ] ]"
                   className="rounded-lg border border-slate-700/40 bg-slate-900/60 p-1 text-slate-500 transition-colors hover:border-cyan-700/40 hover:text-cyan-400"
-          >
+                >
                   <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-                <h2 className="text-sm font-bold uppercase tracking-widest text-slate-100">Mission Console</h2>
+                </button>
+              </div>
+            </div>
+
+          <div className="flex flex-col h-full p-6 text-xs uppercase tracking-wider relative overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
+
+            {/* Drone Activity Matrix */}
+            <div className="border-b border-white/10 pb-6 mb-6">
+              <h3 className="text-xs font-bold tracking-widest text-slate-300 uppercase mb-3 flex items-center gap-2">
+                <Activity className="w-4 h-4 text-cyan-400" /> Swarm Task Matrix
+              </h3>
+              <div className="border border-cyan-900/50 bg-black/40 rounded-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-cyan-900/50 hover:bg-transparent">
+                      <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-slate-500">Drone</TableHead>
+                      <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-slate-500">Task / Payload</TableHead>
+                      <TableHead className="text-[10px] uppercase tracking-widest h-8 px-3 text-right text-slate-500">Pos</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {drones.map((drone) => {
+                      let currentTask = null;
+                      const droneName = drone.drone_id.toUpperCase();
+                      for (let i = missionLogs.length - 1; i >= 0; i--) {
+                        const log = missionLogs[i];
+                        const logText = (log.reasoning || log.message || "");
+                        if (!logText.includes(droneName)) continue;
+                        
+                        const lowerLog = logText.toLowerCase();
+
+                        if (lowerLog.includes("anomaly detected") && lowerLog.includes("offline")) {
+                          currentTask = "Recover offline drone";
+                        } else if (lowerLog.includes("executing won claim on 'sector_")) {
+                          const m = lowerLog.match(/sector_(\d+)/);
+                          currentTask = m ? `Scan Sector ${m[1]}` : "Scan Sector";
+                        } else if (lowerLog.includes("relay") && lowerLog.includes("deployed to")) {
+                          currentTask = "Deploy relay drone";
+                        } else if (lowerLog.includes("relocated existing relay")) {
+                          currentTask = "Relocate relay drone";
+                        } else if (lowerLog.includes("rescue directive:")) {
+                          const mMatch = lowerLog.match(/→\s*(s\d+)\s*\(([^)]+)\)/);
+                          if (mMatch) {
+                            const payloadFmt = mMatch[2] === "medical_kit" ? "Medical Kit" : mMatch[2].charAt(0).toUpperCase() + mMatch[2].slice(1);
+                            currentTask = `Rescue ${mMatch[1].toUpperCase()} (${payloadFmt})`;
+                          } else {
+                            currentTask = "Rescue Survivor";
+                          }
+                        } else if (lowerLog.includes("→ rescuing")) {
+                          const m = lowerLog.match(/rescuing\s+(s\d+)/);
+                          currentTask = m ? `Rescuing Survivor ${m[1].toUpperCase()}` : "Rescuing Survivor";
+                        } else if (lowerLog.includes("to depot:")) {
+                          currentTask = "En route to depot";
+                        } else if (lowerLog.includes("collect:")) {
+                          currentTask = "Collecting supplies";
+                        } else if (lowerLog.includes("to survivor:")) {
+                          currentTask = "En route to survivor";
+                        } else if (lowerLog.includes("deliver:")) {
+                          currentTask = "Delivering supplies";
+                        }
+
+                        if (currentTask) {
+                          break;
+                        }
+                      }
+
+                      return (
+                      <TableRow key={drone.drone_id} className="border-cyan-900/30 hover:bg-cyan-950/40 transition-colors">
+                        <TableCell className="font-bold uppercase text-cyan-300 text-[10px] px-3 py-2 w-16">
+                          {drone.drone_id.replace("drone_", "")}
+                        </TableCell>
+                        <TableCell className="px-3 py-2 text-[10px] text-slate-300">
+                          {currentTask ? (
+                            <div className="text-[10px] text-cyan-300 font-semibold line-clamp-1" title={currentTask}>
+                              {currentTask}
+                            </div>
+                          ) : (
+                            <div className="line-clamp-1">
+                              <span className={cn("font-semibold", droneColor(drone.status))}>{drone.status.toUpperCase()}</span>
+                              {drone.payload ? ` · ${drone.payload.replace(/_/g, " ")}` : ""}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-3 py-2 text-[10px] text-slate-500 font-mono tracking-widest w-16 align-top pt-2.5 whitespace-nowrap text-right">
+                          ({Math.round(drone.position.x)}, {Math.round(drone.position.y)})
+                        </TableCell>
+                      </TableRow>
+                    )})}
+                    {drones.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center py-6 text-[10px] uppercase tracking-widest text-slate-500">
+                          NO DRONES DETECTED
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </div>
               <span className="rounded-md border border-slate-700/50 bg-slate-900/60 px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest text-slate-500">v4.0.2</span>
             </div>
@@ -1446,6 +1547,7 @@ export default function TacticalPage() {
         </Button>
       ) : null}
     </DragOverlay>
+      </div>
     </DndContext>
   );
 }

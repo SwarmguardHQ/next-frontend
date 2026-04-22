@@ -424,11 +424,11 @@ function ShowcaseView({ drone, onBack }: { drone: Drone; onBack: () => void }) {
     const meta = getMeta(drone.drone_id);
     const flying = isFlying(drone.status);
     const [tab, setTab] = useState<"specs" | "systems" | "sensors" | "imu">("specs");
-    const [telemetry, setTelemetry] = useState(generateTelemetry(drone.status === "returning" ? 80 : 50));
+    const [telemetry, setTelemetry] = useState(generateTelemetry(drone.status === "relaying" ? 80 : 50));
 
     useEffect(() => {
         if (!flying) return;
-        const id = setInterval(() => setTelemetry(generateTelemetry(drone.status === "returning" ? 80 : 50)), 1000);
+        const id = setInterval(() => setTelemetry(generateTelemetry(drone.status === "relaying" ? 80 : 50)), 1000);
         return () => clearInterval(id);
     }, [flying, drone.status]);
 
