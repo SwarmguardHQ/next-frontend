@@ -52,6 +52,7 @@ import { useWorldStream } from "@/lib/useWorldStream";
 import { getBackendOrigin } from "@/lib/backendOrigin";
 import type { WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 
 // ─── Stream types ──────────────────────────────────────────────────────────────
 type StreamPoint = {
@@ -155,13 +156,6 @@ function getStatusColor(status: string) {
 }
 
 // ─── Static chart data ─────────────────────────────────────────────────────────
-const HIGH_RISK_ZONES = [
-  { sector: "Sector Alpha", riskScore: 88, full: "Sector Alpha (NW)" },
-  { sector: "Sector Beta",  riskScore: 72, full: "Sector Beta (C)" },
-  { sector: "Sector Delta", riskScore: 45, full: "Sector Delta (SE)" },
-  { sector: "Sector Gamma", riskScore: 30, full: "Sector Gamma (NE)" },
-];
-
 const SCENARIO_CONFIDENCE = [
   { name: "Rescue Priority",  thermal: 88, motion: 76, shape: 90 },
   { name: "Survivor Detect",  thermal: 82, motion: 85, shape: 72 },
@@ -200,6 +194,38 @@ export default function DashboardPage() {
       return mEvents;
     });
   }, []);
+
+	
+  // ── Connection fallback state ──
+  const [isLlamaFallback, setIsLlamaFallback] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("isLlamaFallback") === "true";
+  });
+  const [lostDuration, setLostDuration] = useState(0);
+
+  useEffect(() => {
+    window.localStorage.setItem("isLlamaFallback", String(isLlamaFallback));
+  }, [isLlamaFallback]);
+
+  useEffect(() => {
+    let timer: number | undefined;
+    if (isLlamaFallback) {
+      timer = window.setInterval(() => {
+        setLostDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setLostDuration(0);
+    }
+    return () => window.clearInterval(timer);
+  }, [isLlamaFallback]);
+  
+  const formattedDuration = `${Math.floor(lostDuration / 60)}:${(lostDuration % 60).toString().padStart(2, '0')}`;
+
+  const handleToggleBaseLink = async () => {
+    setIsLlamaFallback((prev) => !prev);
+		console.log("Toggling base link. New state:", !isLlamaFallback);
+  };
+
 
   // ── Telemetry mount + seed events ──
   const [simVisual, setSimVisual] = useState<WorldStreamSimVisual | null>(null);
@@ -381,6 +407,7 @@ export default function DashboardPage() {
               )} />
               {linkStatus === "live" ? "Live Stream" : linkStatus === "rest" ? "REST Only" : linkStatus === "offline" ? "Offline" : "Connecting…"}
             </span>
+						
           </div>
           <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.22em] text-slate-600">
             Fleet Intelligence · SAR Coordination · World Stream
@@ -389,6 +416,12 @@ export default function DashboardPage() {
 
         {/* Right: badges + CTA */}
         <div className="flex flex-wrap items-center gap-2">
+					<button
+            onClick={handleToggleBaseLink}
+            className="rounded border border-red-500/40 bg-red-500/10 px-3 py-1 text-xs text-red-400 hover:bg-red-500/20 transition-colors"
+          >
+            Toggle Connection
+          </button>
           <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
             <Target className="h-3 w-3" /> AI Allocation
           </Badge>

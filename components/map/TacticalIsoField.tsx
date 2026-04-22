@@ -76,13 +76,13 @@ function mcShirt(s: Survivor): string {
 function droneGlow(status: string): string {
   if (status === "charging")  return "#4ade80";
   if (status === "offline")   return "#6b7280";
-  if (status === "returning") return "#fbbf24";
+  if (status === "relaying") return "#fbbf24";
   return "#38bdf8";
 }
 function droneBody(status: string): string {
   if (status === "charging")  return "#065f46";
   if (status === "offline")   return "#374151";
-  if (status === "returning") return "#92400e";
+  if (status === "relaying") return "#92400e";
   return "#155e75";
 }
 
