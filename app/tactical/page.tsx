@@ -60,6 +60,7 @@ import {
   Package,
   HeartPulse,
   Triangle,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -1201,13 +1202,15 @@ export default function TacticalPage() {
             {/* Panel header */}
             <div className="mb-4 flex shrink-0 items-center justify-between">
               <div className="flex items-center gap-1.5">
-          <button 
+                <button
                   onClick={() => setRightOpen(false)}
                   title="Collapse  [ ] ]"
                   className="rounded-lg border border-slate-700/40 bg-slate-900/60 p-1 text-slate-500 transition-colors hover:border-cyan-700/40 hover:text-cyan-400"
-          >
+                >
                   <ChevronRight className="h-3.5 w-3.5" />
-          </button>
+                </button>
+              </div>
+            </div>
 
           <div className="flex flex-col h-full p-6 text-xs uppercase tracking-wider relative overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-cyan-950/80 [&::-webkit-scrollbar-thumb]:rounded-none hover:[&::-webkit-scrollbar-thumb]:bg-cyan-900/80">
 
@@ -1426,6 +1429,7 @@ export default function TacticalPage() {
         </Button>
       ) : null}
     </DragOverlay>
+      </div>
     </DndContext>
   );
 }
