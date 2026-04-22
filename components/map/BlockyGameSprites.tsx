@@ -17,7 +17,7 @@ export function droneBlockyColors(status: string): { hull: string; accent: strin
   const st = status.toLowerCase();
   if (st === "charging") return { hull: "#134e4a", accent: "#5eead4", inverted: false };
   if (st === "offline") return { hull: "#27272a", accent: "#a1a1aa", inverted: true };
-  if (st === "returning") return { hull: "#713f12", accent: "#fcd34d", inverted: false };
+  if (st === "relaying") return { hull: "#713f12", accent: "#fcd34d", inverted: false };
   if (st === "scanning" || st === "flying" || st === "delivering") return { hull: "#155e75", accent: "#38bdf8", inverted: false };
   return { hull: "#1e293b", accent: "#94a3b8", inverted: false };
 }

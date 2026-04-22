@@ -471,7 +471,10 @@ export default function TacticalPage() {
     if (!selectedScenario) return;
     try {
       setIsStarting(true);
-      const res = await api.missions.create({ scenarios: selectedScenario, online_mode: true });
+      const onlineMode = typeof window === "undefined"
+        ? true
+        : window.localStorage.getItem("isLlamaFallback") !== "true";
+      const res = await api.missions.create({ scenarios: selectedScenario, online_mode: onlineMode });
       setSelectedScenario("");
       if (res && res.mission_id) {
          setActiveMissionId(res.mission_id);
@@ -934,7 +937,7 @@ export default function TacticalPage() {
                         <LegendCol title="Drones" items={[
                           { icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("flying")} />,    ring: "bg-cyan-400",    label: "Active",    desc: "Patrol / scan" },
                           { icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("charging")} />,  ring: "bg-emerald-400", label: "Charging",  desc: "At power hub" },
-                          { icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("returning")} />, ring: "bg-amber-400",   label: "Returning", desc: "En route home" },
+                          { icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("relaying")} />, ring: "bg-amber-400",   label: "Relaying", desc: "Relaying data" },
                           { icon: <BlockyDroneSprite className="h-6 w-6" {...droneBlockyColors("offline")} />,   ring: "bg-slate-500",   label: "Offline",   desc: "Inactive" },
                         ]} />
                         <div className="w-px self-stretch bg-slate-800/60" />
@@ -959,7 +962,7 @@ export default function TacticalPage() {
                         <LegendCol title="Drones" items={[
                           { icon: <Triangle fill="currentColor" className="h-5 w-5 text-cyan-400" />,    ring: "bg-cyan-400",    label: "Active",    desc: "Patrol / scan" },
                           { icon: <Triangle fill="currentColor" className="h-5 w-5 text-emerald-400" />, ring: "bg-emerald-400", label: "Charging",  desc: "At power hub" },
-                          { icon: <Triangle fill="currentColor" className="h-5 w-5 text-amber-400" />,   ring: "bg-amber-400",   label: "Returning", desc: "En route home" },
+                          { icon: <Triangle fill="currentColor" className="h-5 w-5 text-amber-400" />,   ring: "bg-amber-400",   label: "Relaying", desc: "Relaying data" },
                           { icon: <Triangle fill="currentColor" className="h-5 w-5 rotate-180 text-red-500" />, ring: "bg-red-500", label: "Offline", desc: "Inactive" },
                         ]} />
                         <div className="w-px self-stretch bg-slate-800/60" />
@@ -984,7 +987,7 @@ export default function TacticalPage() {
                         <LegendCol title="Drones" items={[
                           { icon: <span className="inline-block h-4 w-4 rounded-[3px]" style={{ background: "rgb(61,158,228)" }} />,  ring: "bg-sky-400",     label: "Active",    desc: "Triangle pillar" },
                           { icon: <span className="inline-block h-4 w-4 rounded-[3px]" style={{ background: "rgb(34,197,94)" }} />,   ring: "bg-emerald-400", label: "Charging",  desc: "Green pillar" },
-                          { icon: <span className="inline-block h-4 w-4 rounded-[3px]" style={{ background: "rgb(245,158,11)" }} />,  ring: "bg-amber-400",   label: "Returning", desc: "Amber pillar" },
+                          { icon: <span className="inline-block h-4 w-4 rounded-[3px]" style={{ background: "rgb(245,158,11)" }} />,  ring: "bg-amber-400",   label: "Relaying", desc: "Amber pillar" },
                           { icon: <span className="inline-block h-4 w-4 rounded-[3px]" style={{ background: "rgb(239,68,68)" }} />,   ring: "bg-red-400",     label: "Offline",   desc: "Red pillar" },
                         ]} />
                         <div className="w-px self-stretch bg-slate-800/60" />
