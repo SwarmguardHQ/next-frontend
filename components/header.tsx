@@ -30,7 +30,6 @@ const NAV_ITEMS = [
   { href: "/",            icon: LayoutDashboard, label: "Dashboard",  live: false },
   { href: "/tactical",    icon: Crosshair,       label: "Tactical",   live: true  },
   { href: "/fleet",       icon: Cpu,             label: "Fleet",      live: false },
-  { href: "/simulation",  icon: Layers,          label: "Simulation", live: false },
 ] as const;
 
 // Static mock — swap for a real notification hook when ready

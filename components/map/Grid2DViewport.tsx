@@ -51,7 +51,7 @@ export function Grid2DViewport({
   sceneControlRef,
 }: Grid2DViewportProps): ReactElement {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const [deg, setDeg] = useState(0);
+  const [deg, setDeg] = useState(250);
   const [scale, setScale] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);

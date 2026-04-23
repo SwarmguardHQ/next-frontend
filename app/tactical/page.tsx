@@ -80,6 +80,7 @@ import dynamic from "next/dynamic";
 import type { Drone, Survivor, WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
 import { useWorldStream } from "@/lib/useWorldStream";
 import { MesaSimPanel } from "@/components/sim/MesaSimPanel";
+import { SensorCanvas } from "@/components/sim/SensorCanvas";
 import { Grid2DViewport } from "@/components/map/Grid2DViewport";
 import type { TacticalIsoControls, TacticalPick } from "@/components/map/TacticalIsoField";
 import {
@@ -182,6 +183,7 @@ export default function TacticalPage() {
 	const [eventModalOpen, setEventModalOpen] = useState(false);
   const [pendingEvent, setPendingEvent] = useState<typeof INCIDENT_EVENTS[0] | null>(null);
   const [eventCoords, setEventCoords] = useState<{ x: string, y: string }>({ x: "", y: "" });
+  const [activeEvents, setActiveEvents] = useState<{ id: string; eventId: string; x: number; y: number }[]>([]);
 
   const handleEventAction = (eventId: string) => {
      const ev = INCIDENT_EVENTS.find(e => e.id === eventId);
@@ -194,18 +196,30 @@ export default function TacticalPage() {
 
   const submitEvent = async () => {
       if (!pendingEvent || !eventCoords.x || !eventCoords.y) return;
+      if (!activeMissionId) {
+          setFeedback("No active mission to report to.");
+          return;
+      }
       const parsedX = parseInt(eventCoords.x, 10);
       const parsedY = parseInt(eventCoords.y, 10);
       
       const insight = `There is a ${pendingEvent.label.toLowerCase()} at (${parsedX}, ${parsedY})`;
       
       setFeedback(`Reporting: ${insight}`);
+
+      const evId = Math.random().toString(36).substring(7);
+      setActiveEvents(prev => [...prev, { id: evId, eventId: pendingEvent.id, x: parsedX, y: parsedY }]);
+
       try {
-          // Mock API Call endpoint blank
-          // await fetch('/api/report-insight', { method: 'POST', body: JSON.stringify({ insight }) });
-          console.log("Payload to endpoint:", JSON.stringify({ insight }));
-          setTimeout(() => setFeedback(`AI Agent analyzing Swarm response to: ${insight}`), 1000);
-          setTimeout(() => setFeedback(""), 5000);
+          const origin = getBackendOrigin();
+          const res = await fetch(`${origin}/mission/${activeMissionId}/override`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ insight })
+          });
+          if (!res.ok) {
+              throw new Error(`Server returned ${res.status}`);
+          }
       } catch (err) {
           console.error("Failed to report event", err);
           setFeedback("Failed to reach agent endpoint.");
@@ -264,6 +278,22 @@ export default function TacticalPage() {
     const tick = window.setInterval(() => setPulse((n) => (n + 1) % 2), 900);
     return () => window.clearInterval(tick);
   }, []);
+
+  useEffect(() => {
+    if (drones.length === 0) return;
+    setActiveEvents((prev) => {
+      if (prev.length === 0) return prev;
+      const next = prev.filter((ev) => {
+        const droneAtLoc = drones.some((d) => {
+          const dx = Math.round(Number(d.position?.x ?? -1));
+          const dy = Math.round(Number(d.position?.y ?? -1));
+          return dx === ev.x && dy === ev.y;
+        });
+        return !droneAtLoc;
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [drones]);
 
   const [leftOpen,  setLeftOpen]  = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
@@ -627,6 +657,7 @@ export default function TacticalPage() {
                       onSelectItem={handleIsoPick}
                       onDeselect={handleIsoDeselect}
                       onSwitchToGrid={() => setViewMode("flat")}
+                      activeEvents={activeEvents}
                     />
                   </Grid2DViewport>
                 </div>
@@ -1193,6 +1224,17 @@ export default function TacticalPage() {
                   <SectionLabel icon={<Thermometer className="h-3 w-3 text-amber-400" />}>
                     Sensor Telemetry
                   </SectionLabel>
+
+                  {/* Move Simulation Canvas Here */}
+                  <div className="mb-4">
+                    <SensorCanvas 
+                      drones={drones} 
+                      survivors={survivors} 
+                      simVisual={simVisual} 
+                      gridSize={20} 
+                    />
+                  </div>
+
                   <div className="space-y-2">
                     {detected.length === 0 && (
                       <div className="rounded-lg border border-slate-800/40 bg-slate-900/30 px-3 py-4 text-center">
