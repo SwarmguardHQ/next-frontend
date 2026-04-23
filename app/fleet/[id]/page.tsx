@@ -51,7 +51,10 @@ function CameraFeed({ drone, telemetry }: { drone: Drone; telemetry: ReturnType<
     const flying = isFlying(drone.status);
     const offline = drone.status === "offline";
     const [viewMode, setViewMode] = useState<"optical" | "thermal">("optical");
-    const videoSrc = drone.drone_id === "DRONE_BRAVO" ? "/drone-feed2.mp4" : "/drone-feed1.mp4";
+    // NOTE: Browsers block absolute local paths (e.g. C:\...) for security.
+    // To use custom videos, place them in the 'public' folder and use relative paths.
+    const videoSrc = "/rgb_video.mp4";
+    const thermalSrc = "/thermal_video.mp4";
 
     // Real thermal canvas
     const thermalCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -76,34 +79,10 @@ function CameraFeed({ drone, telemetry }: { drone: Drone; telemetry: ReturnType<
             const GRID = 20;
             const survivors = survivorData?.survivors ?? [];
 
-            // Build Gaussian heat grid from survivor positions
-            const heatGrid = new Float32Array(GRID * GRID).fill(10);
-            for (const sv of survivors) {
-                if (sv.rescued) continue;
-                const peak = sv.condition === "critical" ? 88 : sv.condition === "moderate" ? 66 : 44;
-                for (let dy = -5; dy <= 5; dy++) {
-                    for (let dx = -5; dx <= 5; dx++) {
-                        const gx = Math.round(sv.position.x + dx);
-                        const gy = Math.round(sv.position.y + dy);
-                        if (gx < 0 || gx >= GRID || gy < 0 || gy >= GRID) continue;
-                        const h = peak * Math.exp(-(dx * dx + dy * dy) / (2 * 2.8 * 2.8));
-                        const idx = gy * GRID + gx;
-                        if (h > heatGrid[idx]) heatGrid[idx] = h;
-                    }
-                }
-            }
 
             const cW = W / GRID;
             const cH = H / GRID;
 
-            // Draw cells
-            for (let gy = 0; gy < GRID; gy++) {
-                for (let gx = 0; gx < GRID; gx++) {
-                    const [r, g, b] = thermalColor(heatGrid[gy * GRID + gx]);
-                    ctx.fillStyle = `rgb(${r},${g},${b})`;
-                    ctx.fillRect(gx * cW, gy * cH, cW + 1, cH + 1);
-                }
-            }
 
             // Blob detection circles around detected survivors
             for (const sv of survivors) {
@@ -206,9 +185,15 @@ function CameraFeed({ drone, telemetry }: { drone: Drone; telemetry: ReturnType<
                                 <span className="absolute top-12 left-4 z-30 font-mono text-[10px] text-green-400 bg-black/60 px-2 py-1 flex items-center gap-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                                     OPTICAL VIS
                                 </span>
-                                <video key={`vis-${videoSrc}`} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover grayscale contrast-125">
-                                    <source src={videoSrc} type="video/mp4" />
-                                </video>
+                                <video
+                                    key={`vis-${videoSrc}`}
+                                    src={videoSrc}
+                                    autoPlay
+                                    loop
+                                    muted
+                                    playsInline
+                                    className="absolute inset-0 w-full h-full object-cover grayscale contrast-125"
+                                />
                             </div>
                         ) : (
                             <div className="relative flex-1 bg-slate-950 flex flex-col items-center justify-center gap-2 font-mono text-slate-500 text-xs">
@@ -218,33 +203,34 @@ function CameraFeed({ drone, telemetry }: { drone: Drone; telemetry: ReturnType<
                             </div>
                         )
                     )}
-                    {/* Thermal: always visible — draws heatmap from world survivors */}
+                    {/* Thermal: shows IR video when flying, else standby */}
                     {viewMode === "thermal" && (
-                        <div className="relative flex-1 bg-black overflow-hidden group">
-                            <canvas
-                                ref={thermalCanvasRef}
-                                className="absolute inset-0 w-full h-full"
-                            />
-                            {/* Palette legend */}
-                            <div className="absolute bottom-3 right-3 z-20 flex flex-col gap-0.5 font-mono text-[8px] pointer-events-none">
-                                {[["≥88°", "#ff1c00"], ["70°", "#ff7800"], ["55°", "#ffff00"], ["40°", "#00c8dc"], ["≤15°", "#00006e"]].map(([label, color]) => (
-                                    <div key={label} className="flex items-center gap-1.5">
-                                        <div className="h-2 w-4 rounded-sm" style={{ background: color }} />
-                                        <span className="text-slate-300">{label}</span>
-                                    </div>
-                                ))}
+												flying ? (
+                            <div className="relative flex-1 bg-black overflow-hidden group">
+                                <span className="absolute top-12 left-4 z-30 font-mono text-[10px] text-green-400 bg-black/60 px-2 py-1 flex items-center gap-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                    THERMAL IR
+                                </span>
+                                <video
+                                    key={`thermal-${thermalSrc}`}
+                                    src={thermalSrc}
+                                    autoPlay
+                                    loop
+                                    muted
+                                    playsInline
+                                    className="absolute inset-0 w-full h-full object-cover contrast-125"
+                                />
                             </div>
-                            {/* No-survivors placeholder */}
-                            {(survivorData?.survivors ?? []).filter(s => !s.rescued).length === 0 && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 font-mono text-amber-900/60 pointer-events-none">
-                                    <span className="text-[10px] uppercase tracking-widest">Scanning… no heat signatures</span>
-                                </div>
-                            )}
-                        </div>
+                        ) : (
+                            <div className="relative flex-1 bg-slate-950 flex flex-col items-center justify-center gap-2 font-mono text-slate-500 text-xs">
+                                <Activity className="h-7 w-7 opacity-40" />
+                                <span className="uppercase tracking-widest text-[10px]">THERMAL STANDBY</span>
+                                <span className="text-[9px] text-slate-700 uppercase tracking-wide">{drone.status} — IR ready on takeoff</span>
+                            </div>
+                        )
                     )}
 
-                    <div className="absolute inset-0 bg-green-900/10 mix-blend-color pointer-events-none" />
-                    <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] pointer-events-none z-10" />
+                    {/* <div className="absolute inset-0 bg-green-900/10 mix-blend-color pointer-events-none" />
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] pointer-events-none z-10" /> */}
                     {/* Crosshair */}
                     <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
                         <div className="relative w-16 h-16 border-2 border-green-500/50 rounded-full flex items-center justify-center">
