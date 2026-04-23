@@ -1391,45 +1391,70 @@ export default function TacticalPage() {
                     {drones.map((drone) => {
                       let currentTask = null;
                       const droneName = drone.drone_id.toUpperCase();
-                      for (let i = missionLogs.length - 1; i >= 0; i--) {
-                        const log = missionLogs[i];
-                        const logText = (log.reasoning || log.message || "");
-                        if (!logText.includes(droneName)) continue;
-                        
-                        const lowerLog = logText.toLowerCase();
 
-                        if (lowerLog.includes("anomaly detected") && lowerLog.includes("offline")) {
-                          currentTask = "Recover offline drone";
-                        } else if (lowerLog.includes("executing won claim on 'sector_")) {
-                          const m = lowerLog.match(/sector_(\d+)/);
-                          currentTask = m ? `Scan Sector ${m[1]}` : "Scan Sector";
-                        } else if (lowerLog.includes("relay") && lowerLog.includes("deployed to")) {
-                          currentTask = "Deploy relay drone";
-                        } else if (lowerLog.includes("relocated existing relay")) {
-                          currentTask = "Relocate relay drone";
-                        } else if (lowerLog.includes("rescue directive:")) {
-                          const mMatch = lowerLog.match(/→\s*(s\d+)\s*\(([^)]+)\)/);
-                          if (mMatch) {
-                            const payloadFmt = mMatch[2] === "medical_kit" ? "Medical Kit" : mMatch[2].charAt(0).toUpperCase() + mMatch[2].slice(1);
-                            currentTask = `Rescue ${mMatch[1].toUpperCase()} (${payloadFmt})`;
-                          } else {
-                            currentTask = "Rescue Survivor";
+                      // 1. Tier 1: Critical Ground Truth (Hard Overrides)
+                      if (drone.status === "relaying") {
+                        currentTask = "Relaying";
+                      } else if (drone.status === "charging") {
+                        currentTask = "Charging";
+                      } else if (drone.status === "offline") {
+                        currentTask = "Offline";
+                      }
+
+                      // 2. Tier 2: Mission Intent (Logs)
+                      if (!currentTask) {
+                        for (let i = missionLogs.length - 1; i >= 0; i--) {
+                          const log = missionLogs[i];
+                          const logText = (log.reasoning || log.message || "");
+                          if (!logText.includes(droneName)) continue;
+                          
+                          const lowerLog = logText.toLowerCase();
+                          const isActor = logText.trim().startsWith(`[${droneName}]`);
+
+                          if (lowerLog.includes("anomaly detected") && lowerLog.includes("offline")) {
+                            if (isActor) currentTask = "Recover offline drone";
+                          } else if (lowerLog.includes("executing won claim on 'sector_")) {
+                            const m = lowerLog.match(/sector_(\d+)/);
+                            if (isActor) currentTask = m ? `Scan Sector ${m[1]}` : "Scan Sector";
+                          } else if (lowerLog.includes("relay") && lowerLog.includes("thermal_scan")) {
+                            currentTask = "Relaying";
+                          } else if (lowerLog.includes("relocated existing relay")) {
+                            if (isActor && drone.status === "flying") currentTask = "Relocate relay drone";
+                          } else if (lowerLog.includes("rescue directive:")) {
+                            const mMatch = lowerLog.match(/→\s*(s\d+)\s*\(([^)]+)\)/);
+                            if (mMatch) {
+                              const payloadFmt = mMatch[2] === "medical_kit" ? "Medical Kit" : mMatch[2].charAt(0).toUpperCase() + mMatch[2].slice(1);
+                              currentTask = `Rescue ${mMatch[1].toUpperCase()} (${payloadFmt})`;
+                            } else {
+                              currentTask = "Rescue Survivor";
+                            }
+                          } else if (lowerLog.includes("→ rescuing")) {
+                            const m = lowerLog.match(/rescuing\s+(s\d+)/);
+                            currentTask = m ? `Rescuing Survivor ${m[1].toUpperCase()}` : "Rescuing Survivor";
+                          } else if (lowerLog.includes("to depot:")) {
+                            currentTask = "En route to depot";
+                          } else if (lowerLog.includes("collect:")) {
+                            currentTask = "Collecting supplies";
+                          } else if (lowerLog.includes("to survivor:")) {
+                            currentTask = "En route to survivor";
+                          } else if (lowerLog.includes("deliver:")) {
+                            currentTask = "Delivering supplies";
                           }
-                        } else if (lowerLog.includes("→ rescuing")) {
-                          const m = lowerLog.match(/rescuing\s+(s\d+)/);
-                          currentTask = m ? `Rescuing Survivor ${m[1].toUpperCase()}` : "Rescuing Survivor";
-                        } else if (lowerLog.includes("to depot:")) {
-                          currentTask = "En route to depot";
-                        } else if (lowerLog.includes("collect:")) {
-                          currentTask = "Collecting supplies";
-                        } else if (lowerLog.includes("to survivor:")) {
-                          currentTask = "En route to survivor";
-                        } else if (lowerLog.includes("deliver:")) {
-                          currentTask = "Delivering supplies";
-                        }
 
-                        if (currentTask) {
-                          break;
+                          if (currentTask) break;
+                        }
+                      }
+
+                      // 3. Tier 3: Soft Ground Truth (State Fallback)
+                      if (!currentTask) {
+                        if (drone.status === "scanning") {
+                          currentTask = drone.assigned_sector 
+                            ? `Scan ${drone.assigned_sector.replace("sector_", "Sector ").toUpperCase()}` 
+                            : "Scanning";
+                        } else if (drone.status === "delivering") {
+                          currentTask = drone.payload 
+                            ? `Rescue (${drone.payload.replace("_", " ").toUpperCase()})` 
+                            : "Delivering";
                         }
                       }
 
