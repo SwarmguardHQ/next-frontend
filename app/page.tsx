@@ -197,19 +197,19 @@ export default function DashboardPage() {
 
 	
   // ── Connection fallback state ──
-  const [isLlamaFallback, setIsLlamaFallback] = useState(() => {
+  const [isQwenFallback, setIsQwenFallback] = useState(() => {
     if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("isLlamaFallback") === "true";
+    return window.localStorage.getItem("isQwenFallback") === "true";
   });
   const [lostDuration, setLostDuration] = useState(0);
 
   useEffect(() => {
-    window.localStorage.setItem("isLlamaFallback", String(isLlamaFallback));
-  }, [isLlamaFallback]);
+    window.localStorage.setItem("isQwenFallback", String(isQwenFallback));
+  }, [isQwenFallback]);
 
   useEffect(() => {
     let timer: number | undefined;
-    if (isLlamaFallback) {
+    if (isQwenFallback) {
       timer = window.setInterval(() => {
         setLostDuration((prev) => prev + 1);
       }, 1000);
@@ -217,13 +217,13 @@ export default function DashboardPage() {
       setLostDuration(0);
     }
     return () => window.clearInterval(timer);
-  }, [isLlamaFallback]);
+  }, [isQwenFallback]);
   
   const formattedDuration = `${Math.floor(lostDuration / 60)}:${(lostDuration % 60).toString().padStart(2, '0')}`;
 
   const handleToggleBaseLink = async () => {
-    setIsLlamaFallback((prev) => !prev);
-		console.log("Toggling base link. New state:", !isLlamaFallback);
+    setIsQwenFallback((prev) => !prev);
+		console.log("Toggling base link. New state:", !isQwenFallback);
   };
 
 
@@ -414,27 +414,68 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Right: badges + CTA */}
+        {/* Right: badges + CTA ── */}
         <div className="flex flex-wrap items-center gap-2">
+
 					<button
             onClick={handleToggleBaseLink}
-            className="rounded border border-red-500/40 bg-red-500/10 px-3 py-1 text-xs text-red-400 hover:bg-red-500/20 transition-colors"
+            className="h-8 rounded border border-red-500/40 bg-red-500/10 px-3 text-[9px] font-bold uppercase tracking-widest text-red-400 transition-colors hover:bg-red-500/20"
           >
-            Toggle Connection
+            Toggle Link
           </button>
-          <Badge className="border border-sky-400/40 bg-sky-500/10 text-sky-300">
+
+          {/* Connection Status Badge */}
+          <div className={cn(
+            "flex h-8 items-center gap-2 rounded border px-3 transition-all duration-300",
+            isQwenFallback 
+              ? "border-amber-500/40 bg-amber-500/10 text-amber-400" 
+              : "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+          )}>
+            {isQwenFallback ? (
+              <WifiOff className="h-3 w-3 animate-pulse" />
+            ) : (
+              <Wifi className="h-3 w-3" />
+            )}
+            <span className="text-[9px] font-bold uppercase tracking-wider">
+              {isQwenFallback ? "Local Fallback" : "Link Active"}
+            </span>
+          </div>
+
+          {/* AI Model Badge */}
+          <div className={cn(
+            "flex h-8 items-center gap-2 rounded border px-3 transition-all duration-300",
+            isQwenFallback
+              ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+              : "border-indigo-500/40 bg-indigo-500/10 text-indigo-400"
+          )}>
+            <div className="flex flex-col leading-none">
+              <span className="text-[9px] font-bold uppercase tracking-wider">
+                {isQwenFallback ? "Qwen 3.5" : "Gemini 1.5 Pro"}
+              </span>
+              {isQwenFallback && (
+                <span className="mt-0.5 text-[8px] font-medium opacity-80">
+                  {formattedDuration}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <Badge className="h-8 border border-sky-400/40 bg-sky-500/10 px-3 text-[9px] font-bold uppercase tracking-wider text-sky-300">
             <Target className="h-3 w-3" /> AI Allocation
           </Badge>
+
           {simVisual && worldStreamLive && (
-            <Badge className="border border-violet-400/40 bg-violet-500/10 text-violet-200">
+            <Badge className="h-8 border border-violet-400/40 bg-violet-500/10 px-3 text-[9px] font-bold uppercase tracking-wider text-violet-200">
               <Radar className="h-3 w-3" /> Mesa Step {simVisual.mesa_step}
             </Badge>
           )}
+
           {apiError && (
-            <Badge className="border border-red-500/40 bg-red-500/10 text-red-300" title={apiError}>
+            <Badge className="h-8 border border-red-500/40 bg-red-500/10 px-3 text-[9px] font-bold uppercase tracking-wider text-red-300" title={apiError}>
               <WifiOff className="h-3 w-3" /> API Error
             </Badge>
           )}
+
         </div>
       </div>
 

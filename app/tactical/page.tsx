@@ -503,7 +503,7 @@ export default function TacticalPage() {
       setIsStarting(true);
       const onlineMode = typeof window === "undefined"
         ? true
-        : window.localStorage.getItem("isLlamaFallback") !== "true";
+        : window.localStorage.getItem("isQwenFallback") !== "true";
       const res = await api.missions.create({ scenarios: selectedScenario, online_mode: onlineMode });
       setSelectedScenario("");
       if (res && res.mission_id) {
