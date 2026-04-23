@@ -393,6 +393,22 @@ export default function TacticalPage() {
         const [mRes, scRes] = await Promise.all([api.missions.list(), api.scenarios.list()]);
         setMissionsData(mRes);
         setScenariosData(scRes);
+
+        // If no active mission is set, try to find the most recent running mission.
+        setActiveMissionId((currentId) => {
+          if (currentId) return currentId;
+          
+          if (mRes.missions?.length > 0) {
+            const running = mRes.missions
+              .filter((m: any) => m.status === "running")
+              .sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+            
+            if (running.length > 0) {
+              return running[0].mission_id;
+            }
+          }
+          return null;
+        });
       } catch (e) { }
     };
 
@@ -419,6 +435,22 @@ export default function TacticalPage() {
   }, []);
 
   const [activeMissionId, setActiveMissionId] = useState<string | null>(null);
+
+  // Initialize from localStorage and auto-select if needed
+  useEffect(() => {
+    const savedId = localStorage.getItem("activeMissionId");
+    if (savedId) {
+      setActiveMissionId(savedId);
+    }
+  }, []);
+
+  // Save active mission to localStorage
+  useEffect(() => {
+    if (activeMissionId) {
+      localStorage.setItem("activeMissionId", activeMissionId);
+    }
+  }, [activeMissionId]);
+
   const [missionLogs, setMissionLogs] = useState<LogEvent[]>([]);
   const [streamActive, setStreamActive] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -431,6 +463,9 @@ export default function TacticalPage() {
 
   useEffect(() => {
     if (!activeMissionId) return;
+
+    // Reset logs when switching missions
+    setMissionLogs([]);
 
     const origin = getBackendOrigin();
     const eventSource = new EventSource(`${origin}/mission/${activeMissionId}/stream`);
@@ -508,7 +543,6 @@ export default function TacticalPage() {
       setSelectedScenario("");
       if (res && res.mission_id) {
          setActiveMissionId(res.mission_id);
-         setMissionLogs([]);
       }
     } catch (e) { } finally {
       setIsStarting(false);
@@ -1481,9 +1515,9 @@ export default function TacticalPage() {
                         </TableHeader>
                         <TableBody>
                           {sortedMissions.slice(0, 3).map((mission) => (
-                      <TableRow key={mission.mission_id} className="border-slate-800/30 cursor-pointer transition-colors hover:bg-slate-800/40 group relative" onClick={() => { setActiveMissionId(mission.mission_id); setMissionLogs([]); }}>
+                      <TableRow key={mission.mission_id} className="border-slate-800/30 cursor-pointer transition-colors hover:bg-slate-800/40 group relative" onClick={() => { setActiveMissionId(mission.mission_id); }}>
                         <TableCell className="px-3 py-2 font-medium text-cyan-300">
-                          <button onClick={(e) => { e.stopPropagation(); setActiveMissionId(mission.mission_id); setMissionLogs([]); }}
+                          <button onClick={(e) => { e.stopPropagation(); setActiveMissionId(mission.mission_id); }}
                             className="flex items-center gap-1.5 text-left text-[10px] uppercase hover:text-cyan-200 focus:outline-none"
                           >
                                   {mission.scenarios.replace(/_/g, " ")}
