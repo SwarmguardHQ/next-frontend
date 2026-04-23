@@ -24,8 +24,9 @@ export function mapToWorldVec(
 ): THREE.Vector3 {
   const tw = tileW / 2;
   const th = tileH / 2;
-  const wx = (mapX - mapY) * tw;
-  const wz = (mapX + mapY) * th;
+  // Swapping mapX and mapY to fix inverted coordinates in Iso Field
+  const wx = (mapY - mapX) * tw;
+  const wz = (mapY + mapX) * th;
   const wy = mapZ;
   return new THREE.Vector3(wx, wy, wz);
 }
@@ -41,7 +42,8 @@ export function worldXZToMapFrac(
   const th2 = tileH / 2;
   const sum = wz / th2;
   const diff = wx / tw2;
-  return { mx: (sum + diff) / 2, my: (sum - diff) / 2 };
+  // Swapping mx and my to match mapToWorldVec fix
+  return { mx: (sum - diff) / 2, my: (sum + diff) / 2 };
 }
 
 /** Scene origin: center of the grid in map space (cell centers). */

@@ -36,6 +36,7 @@ const MIN_POLAR = (42 * Math.PI) / 180;
 const MAX_POLAR = (72 * Math.PI) / 180;
 const DEF_POLAR = (60 * Math.PI) / 180;   // ← classic 30° elevation isometric
 const TILE_COLORS = ["#16223a", "#1a2840", "#1c2d48", "#19253e"] as const;
+const UNIT_SCALE = 2.5; // Scale factor for survivors and drones
 
 
 // ─── exported types ───────────────────────────────────────────────────────────
@@ -75,16 +76,16 @@ function mcShirt(s: Survivor): string {
   return "#94a3b8";
 }
 function droneGlow(status: string): string {
-  if (status === "charging")  return "#4ade80";
-  if (status === "offline")   return "#6b7280";
-  if (status === "relaying") return "#fbbf24";
-  return "#38bdf8";
+  if (status === "charging")  return "#86efac"; // Brighter green
+  if (status === "offline")   return "#94a3b8"; // Brighter slate
+  if (status === "relaying") return "#fde047"; // Brighter yellow
+  return "#7dd3fc"; // Brighter sky blue
 }
 function droneBody(status: string): string {
-  if (status === "charging")  return "#065f46";
-  if (status === "offline")   return "#374151";
-  if (status === "relaying") return "#92400e";
-  return "#155e75";
+  if (status === "charging")  return "#4ade80"; // Light green
+  if (status === "offline")   return "#e2e8f0"; // Light gray/silver
+  if (status === "relaying") return "#fbbf24"; // Light amber/gold
+  return "#38bdf8"; // Light sky blue
 }
 
 // ─── 2-D minimap overlay ──────────────────────────────────────────────────────
@@ -557,22 +558,6 @@ function SectorLabel({ sector }: { sector: TacticalSector }) {
           }}>
             {sector.icon} {sector.id}
           </div>
-          <div style={{
-            background: "rgba(2,6,20,0.80)",
-            border: `1px solid ${sector.color}44`,
-            borderRadius: "3px",
-            padding: "1px 7px",
-            fontFamily: "monospace",
-            fontSize: "8px",
-            fontWeight: 700,
-            letterSpacing: "0.14em",
-            color: sector.color,
-            opacity: 0.85,
-            textTransform: "uppercase",
-            whiteSpace: "nowrap",
-          }}>
-            {sector.type}
-          </div>
         </div>
       </Html>
     </group>
@@ -652,9 +637,9 @@ function MinecraftSurvivor({
   const dimmed = !survivor.detected && !survivor.rescued;
   const op     = dimmed ? 0.55 : 1.0;
   const skin   = "#f5c9a0";
-  const pants  = "#1e3a8a";
-  const hair   = "#2c1a0e";
-  const isCrit = survivor.condition === "critical" && !survivor.rescued;
+    const pants  = "#1e3a8a";
+    const hair   = "#fde68a"; // Light blonde for visibility
+    const isCrit = survivor.condition === "critical" && !survivor.rescued;
   const phase  = useMemo(() => idHash(survivor.survivor_id), [survivor.survivor_id]);
 
   // Single useFrame: camera-facing + idle breathing + critical pulse
@@ -679,8 +664,10 @@ function MinecraftSurvivor({
 
     // Critical pulse scale
     if (scaleRef.current && isCrit) {
-      const s = 1 + Math.sin(Date.now() * 0.003) * 0.05;
+      const s = UNIT_SCALE * (1 + Math.sin(Date.now() * 0.003) * 0.05);
       scaleRef.current.scale.setScalar(s);
+    } else if (scaleRef.current) {
+      scaleRef.current.scale.setScalar(UNIT_SCALE);
     }
   });
 
@@ -698,12 +685,12 @@ function MinecraftSurvivor({
     >
       {/* Condition status ring on ground — most visible indicator */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.008, 0]}>
-        <ringGeometry args={[0.062, 0.092, 22]} />
+        <ringGeometry args={[0.062 * UNIT_SCALE, 0.092 * UNIT_SCALE, 22]} />
         <meshBasicMaterial color={shirt} transparent opacity={dimmed ? 0.18 : 0.70} depthWrite={false} />
       </mesh>
       {/* AO foot shadow inside ring */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
-        <circleGeometry args={[0.060, 14]} />
+        <circleGeometry args={[0.060 * UNIT_SCALE, 14]} />
         <meshBasicMaterial color="#010b14" transparent opacity={0.38} depthWrite={false} />
       </mesh>
 
@@ -797,18 +784,18 @@ function Drone3D({
     >
       {/* Status-colored ground ring */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[wx, SLAB_H + 0.008, wz]}>
-        <ringGeometry args={[0.085, 0.118, 22]} />
+        <ringGeometry args={[0.085 * UNIT_SCALE, 0.118 * UNIT_SCALE, 22]} />
         <meshBasicMaterial color={glow} transparent opacity={0.55} depthWrite={false} />
       </mesh>
       {/* AO shadow */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[wx, SLAB_H + 0.005, wz]}>
-        <circleGeometry args={[0.082, 16]} />
+        <circleGeometry args={[0.082 * UNIT_SCALE, 16]} />
         <meshBasicMaterial color="#010b14" transparent opacity={0.38} depthWrite={false} />
       </mesh>
 
       <DroneTether wx={wx} wz={wz} />
 
-      <group ref={hoverRef} position={[wx, DRONE_ALT, wz]}>
+      <group ref={hoverRef} position={[wx, DRONE_ALT, wz]} scale={UNIT_SCALE}>
         {/* Hexagonal body */}
         <mesh castShadow>
           <cylinderGeometry args={[0.048, 0.058, 0.036, 6]} />
@@ -817,11 +804,11 @@ function Drone3D({
         {/* X-arms */}
         <mesh rotation={[0,  Math.PI / 4, 0]} castShadow>
           <boxGeometry args={[0.21, 0.013, 0.022]} />
-          <meshStandardMaterial color="#0f172a" roughness={0.38} metalness={0.58} />
+          <meshStandardMaterial color="#94a3b8" roughness={0.38} metalness={0.58} />
         </mesh>
         <mesh rotation={[0, -Math.PI / 4, 0]} castShadow>
           <boxGeometry args={[0.21, 0.013, 0.022]} />
-          <meshStandardMaterial color="#0f172a" roughness={0.38} metalness={0.58} />
+          <meshStandardMaterial color="#94a3b8" roughness={0.38} metalness={0.58} />
         </mesh>
         {/* Rotors (spinning) */}
         <group ref={rotorRef}>
@@ -831,7 +818,7 @@ function Drone3D({
               rotation={[-Math.PI / 2, 0, 0]}
             >
               <circleGeometry args={[0.042, 8]} />
-              <meshStandardMaterial color="#1e293b" roughness={0.28} metalness={0.68}
+              <meshStandardMaterial color="#64748b" roughness={0.28} metalness={0.68}
                 side={THREE.DoubleSide} transparent opacity={0.78} />
             </mesh>
           ))}
@@ -1360,7 +1347,7 @@ const IsoScene = forwardRef<
       {chargingStations.map((st) => <ChargingStationBuilding key={st.id} st={st} />)}
       {supplyDepots.map((st)       => <SupplyDepotBuilding    key={st.id} st={st} />)}
       {chargingStations.map((st) => <BuildingHitbox key={`hb-cs-${st.id}`} st={st} bh={BH_CS}    kind="charging" onSelectItem={onSelectItem} />)}
-      {supplyDepots.map((st)       => <BuildingHitbox key={`hb-dp-${st.id}`} st={st} bh={BH_DEPOT} kind="depot"    onSelectItem={onSelectItem} />)}
+      {supplyDepots.map((st)       => <BuildingHitbox key={`hb-dp-${st.id}`} st={st} bh={BH_DEPOT} kind="depot"    onSelectItem={onSelectItem} />) }
 
       {cells.map(({ x: ix, y: iy }) => {
         const k  = `${ix}-${iy}`;
@@ -1370,7 +1357,7 @@ const IsoScene = forwardRef<
         return (
           <group key={`u-${k}`}>
             {ss.map((s, i) => {
-              const spread = (i - (ss.length - 1) / 2) * 0.18;
+              const spread = (i - (ss.length - 1) / 2) * 0.28;
               const w = mapToWorldVec(ix + 0.5 + spread * 0.3, iy + 0.5 + spread * 0.18);
               return (
                 <MinecraftSurvivor
@@ -1380,7 +1367,7 @@ const IsoScene = forwardRef<
               );
             })}
             {ds.map((d, i) => {
-              const spread = (i - (ds.length - 1) / 2) * 0.18;
+              const spread = (i - (ds.length - 1) / 2) * 0.28;
               const w = mapToWorldVec(ix + 0.5 - spread * 0.3, iy + 0.5 + spread * 0.18);
               return (
                 <Drone3D
