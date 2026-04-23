@@ -189,7 +189,7 @@ function MinimapPanel({
               Open 2D Grid
             </span>
           </div>
-        )}
+        )}canvas
       </div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-black/50 px-2.5 py-2">
         <MinimapLegend color="bg-red-400"     label="Critical" />
@@ -982,9 +982,9 @@ const IsoScene = forwardRef<
   }, [gridSize]);
 
   useEffect(() => {
-    const dist  = gridSize * 1.18;
+    const dist  = gridSize * 0.8;
     const theta = DEF_POLAR;   // 60° → 30° above horizon
-    const phi   = Math.PI / 4;
+    const phi   = Math.PI / 4 + 3.9
     const pos   = new THREE.Vector3(
       center.x + dist * Math.sin(theta) * Math.cos(phi),
       dist * Math.cos(theta),
