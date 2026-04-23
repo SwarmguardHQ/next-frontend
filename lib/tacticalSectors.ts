@@ -32,8 +32,8 @@ export type TacticalSector = {
 };
 
 export const TACTICAL_SECTORS: TacticalSector[] = [
-  { id: "SEC-1", type: "School",      x: 5,  y: 2,  color: "#facc15", rgba: [250, 204, 21,  255], icon: "🏫" },
-  { id: "SEC-2", type: "Industrial",  x: 12, y: 12, color: "#f97316", rgba: [249, 115, 22,  255], icon: "🏭" },
-  { id: "SEC-3", type: "Residential", x: 2,  y: 16, color: "#34d399", rgba: [52,  211, 153, 255], icon: "🏘️" },
-  { id: "SEC-4", type: "Commercial",  x: 14, y: 6,  color: "#818cf8", rgba: [129, 140, 248, 255], icon: "🏢" },
+  { id: "SEC-1", type: "Industrial", x: 12,  y: 12,  color: "#facc15", rgba: [250, 204, 21,  255], icon: "🏭" },
+  { id: "SEC-2", type: "School", x: 3, y: 16, color: "#f97316", rgba: [249, 115, 22,  255], icon: "🏫" },
+  { id: "SEC-3", type: "Residential", x: 14,  y: 6, color: "#34d399", rgba: [52,  211, 153, 255], icon: "🏘️" },
+  { id: "SEC-4", type: "Commercial", x: 16, y: 11,  color: "#818cf8", rgba: [129, 140, 248, 255], icon: "🏢" },
 ];
