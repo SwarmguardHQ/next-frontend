@@ -80,6 +80,7 @@ import dynamic from "next/dynamic";
 import type { Drone, Survivor, WorldStreamSimVisual, WorldStreamTickPayload } from "@/types/api_types";
 import { useWorldStream } from "@/lib/useWorldStream";
 import { MesaSimPanel } from "@/components/sim/MesaSimPanel";
+import { SensorCanvas } from "@/components/sim/SensorCanvas";
 import { Grid2DViewport } from "@/components/map/Grid2DViewport";
 import type { TacticalIsoControls, TacticalPick } from "@/components/map/TacticalIsoField";
 import {
@@ -1201,6 +1202,17 @@ export default function TacticalPage() {
                   <SectionLabel icon={<Thermometer className="h-3 w-3 text-amber-400" />}>
                     Sensor Telemetry
                   </SectionLabel>
+
+                  {/* Move Simulation Canvas Here */}
+                  <div className="mb-4">
+                    <SensorCanvas 
+                      drones={drones} 
+                      survivors={survivors} 
+                      simVisual={simVisual} 
+                      gridSize={20} 
+                    />
+                  </div>
+
                   <div className="space-y-2">
                     {detected.length === 0 && (
                       <div className="rounded-lg border border-slate-800/40 bg-slate-900/30 px-3 py-4 text-center">
