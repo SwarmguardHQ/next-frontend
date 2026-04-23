@@ -1360,7 +1360,7 @@ const IsoScene = forwardRef<
       {chargingStations.map((st) => <ChargingStationBuilding key={st.id} st={st} />)}
       {supplyDepots.map((st)       => <SupplyDepotBuilding    key={st.id} st={st} />)}
       {chargingStations.map((st) => <BuildingHitbox key={`hb-cs-${st.id}`} st={st} bh={BH_CS}    kind="charging" onSelectItem={onSelectItem} />)}
-      {supplyDepots.map((st)       => <BuildingHitbox key={`hb-dp-${st.id}`} st={st} bh={BH_DEPOT} kind="depot"    onSelectItem={onSelectItem} />)}
+      {supplyDepots.map((st)       => <BuildingHitbox key={`hb-dp-${st.id}`} st={st} bh={BH_DEPOT} kind="depot"    onSelectItem={onSelectItem} />) }
 
       {cells.map(({ x: ix, y: iy }) => {
         const k  = `${ix}-${iy}`;
