@@ -194,6 +194,10 @@ export default function TacticalPage() {
 
   const submitEvent = async () => {
       if (!pendingEvent || !eventCoords.x || !eventCoords.y) return;
+      if (!activeMissionId) {
+          setFeedback("No active mission to report to.");
+          return;
+      }
       const parsedX = parseInt(eventCoords.x, 10);
       const parsedY = parseInt(eventCoords.y, 10);
       
@@ -201,11 +205,15 @@ export default function TacticalPage() {
       
       setFeedback(`Reporting: ${insight}`);
       try {
-          // Mock API Call endpoint blank
-          // await fetch('/api/report-insight', { method: 'POST', body: JSON.stringify({ insight }) });
-          console.log("Payload to endpoint:", JSON.stringify({ insight }));
-          setTimeout(() => setFeedback(`AI Agent analyzing Swarm response to: ${insight}`), 1000);
-          setTimeout(() => setFeedback(""), 5000);
+          const origin = getBackendOrigin();
+          const res = await fetch(`${origin}/mission/${activeMissionId}/override`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ insight })
+          });
+          if (!res.ok) {
+              throw new Error(`Server returned ${res.status}`);
+          }
       } catch (err) {
           console.error("Failed to report event", err);
           setFeedback("Failed to reach agent endpoint.");
