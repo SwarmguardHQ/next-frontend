@@ -217,7 +217,7 @@ function CameraFeed({ drone, telemetry }: { drone: Drone; telemetry: ReturnType<
                                     loop
                                     muted
                                     playsInline
-                                    className="absolute inset-0 w-full h-full object-cover grayscale contrast-125"
+                                    className="absolute inset-0 w-full h-full object-cover contrast-125"
                                 />
                             </div>
                         ) : (
