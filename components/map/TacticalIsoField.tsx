@@ -59,6 +59,7 @@ export type TacticalIsoFieldProps = {
   onDeselect: () => void;
   onAzimuthRad?: (rad: number) => void;
   onSwitchToGrid?: () => void;
+  activeEvents?: { id: string; eventId: string; x: number; y: number }[];
 };
 
 function clamp(n: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, n)); }
@@ -936,6 +937,291 @@ function LodUpdater({
   return null;
 }
 
+// ─── reported event effect ────────────────────────────────────────────────────
+function FireEffect({ p }: { p: THREE.Vector3 }) {
+  const count = 60;
+  const pointsRef = useRef<THREE.Points>(null);
+  const color = "#ff5500";
+  
+  const [positions, speeds] = useMemo(() => {
+    const pos = new Float32Array(count * 3);
+    const spd = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      pos[i * 3] = (Math.random() - 0.5) * 0.4;
+      pos[i * 3 + 1] = Math.random() * 1.0;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 0.4;
+      spd[i] = 0.005 + Math.random() * 0.015;
+    }
+    return [pos, spd];
+  }, [count]);
+
+  useFrame((state) => {
+    if (!pointsRef.current) return;
+    const attr = pointsRef.current.geometry.attributes.position;
+    const t = state.clock.elapsedTime;
+    
+    for (let i = 0; i < count; i++) {
+      let y = attr.getY(i);
+      y += speeds[i];
+      if (y > 1.2) {
+        y = 0;
+        attr.setX(i, (Math.random() - 0.5) * 0.4);
+        attr.setZ(i, (Math.random() - 0.5) * 0.4);
+      }
+      attr.setY(i, y);
+      
+      const x = attr.getX(i);
+      const z = attr.getZ(i);
+      attr.setX(i, x + Math.sin(t * 2 + i) * 0.002);
+      attr.setZ(i, z + Math.cos(t * 2 + i) * 0.002);
+    }
+    attr.needsUpdate = true;
+  });
+
+  return (
+    <group position={[p.x, p.y, p.z]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+        <circleGeometry args={[0.3, 16]} />
+        <meshBasicMaterial color={color} transparent opacity={0.25} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <points ref={pointsRef}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        </bufferGeometry>
+        <pointsMaterial
+          size={0.06}
+          color={color}
+          transparent
+          opacity={0.7}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          sizeAttenuation
+        />
+      </points>
+    </group>
+  );
+}
+
+function SmokeEffect({ p }: { p: THREE.Vector3 }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const color1 = "#94a3b8";
+  const color2 = "#64748b";
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+    const t = clock.elapsedTime;
+    groupRef.current.children.forEach((c, i) => {
+      c.position.y = ((t * 1.5 + i * 0.4) % 0.8) + 0.1;
+      c.scale.setScalar(Math.max(0, 1 - (c.position.y - 0.1) / 0.8));
+      c.rotation.x = t * 2 + i;
+      c.rotation.y = t * 3 + i;
+    });
+  });
+  return (
+    <group position={[p.x, p.y, p.z]}>
+       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+         <circleGeometry args={[0.25, 16]} />
+         <meshBasicMaterial color={color1} transparent opacity={0.4} depthWrite={false} blending={THREE.AdditiveBlending} />
+       </mesh>
+       <group ref={groupRef}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <mesh key={i}>
+              <boxGeometry args={[0.15, 0.15, 0.15]} />
+              <meshBasicMaterial color={i % 2 === 0 ? color1 : color2} transparent opacity={0.7} blending={THREE.AdditiveBlending} depthWrite={false} />
+            </mesh>
+          ))}
+       </group>
+    </group>
+  );
+}
+
+function FloodEffect({ p }: { p: THREE.Vector3 }) {
+  const count = 6;
+  const groupRef = useRef<THREE.Group>(null);
+  const color = "#3b82f6";
+  
+  const particles = useMemo(() => {
+    return Array.from({ length: count }).map(() => ({
+      x: (Math.random() - 0.5) * 0.4,
+      z: (Math.random() - 0.5) * 0.4,
+      y: Math.random() * 0.5,
+      speed: 0.0005 + Math.random() * 0.001,
+    }));
+  }, [count]);
+
+  useFrame(() => {
+    if (!groupRef.current) return;
+    groupRef.current.children.forEach((c, i) => {
+      const data = particles[i];
+      c.position.y += data.speed;
+      if (c.position.y > 0.5) {
+        c.position.y = 0;
+      }
+    });
+  });
+
+  return (
+    <group position={[p.x, p.y, p.z]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+        <circleGeometry args={[0.3, 16]} />
+        <meshBasicMaterial color={color} transparent opacity={0.3} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <group ref={groupRef}>
+        {particles.map((data, i) => (
+          <mesh key={i} position={[data.x, data.y, data.z]}>
+            <sphereGeometry args={[0.08, 12, 12]} />
+            <meshBasicMaterial color={color} transparent opacity={0.6} blending={THREE.AdditiveBlending} depthWrite={false} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
+
+function BiohazardEffect({ p }: { p: THREE.Vector3 }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.position.y = 0.2 + Math.sin(clock.elapsedTime * 3) * 0.05;
+  });
+  return (
+    <group position={[p.x, p.y, p.z]}>
+       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+         <circleGeometry args={[0.3, 16]} />
+         <meshBasicMaterial color="#a3e635" transparent opacity={0.5} depthWrite={false} blending={THREE.AdditiveBlending} />
+       </mesh>
+       <group ref={ref}>
+         <Html center style={{ pointerEvents: 'none' }}>
+           <div style={{ fontSize: '24px', filter: 'drop-shadow(0 0 8px #a3e635)' }}>☠️</div>
+         </Html>
+       </group>
+    </group>
+  );
+}
+
+function EarthquakeEffect({ p }: { p: THREE.Vector3 }) {
+  const shockRef = useRef<THREE.Group>(null);
+  const shakeRef = useRef<THREE.Group>(null);
+
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    
+    if (shockRef.current) {
+      shockRef.current.children.forEach((c, i) => {
+        const progress = (t * 0.8 + i * 0.33) % 1;
+        c.scale.setScalar(progress * 2.8);
+        if (c instanceof THREE.Mesh && c.material instanceof THREE.Material) {
+          c.material.opacity = (1 - progress) * 0.7;
+        }
+      });
+    }
+
+    if (shakeRef.current) {
+      const s = 0.025;
+      shakeRef.current.position.x = (Math.random() - 0.5) * s;
+      shakeRef.current.position.z = (Math.random() - 0.5) * s;
+    }
+  });
+
+  return (
+    <group position={[p.x, p.y, p.z]}>
+      <group ref={shockRef}>
+        {[0, 1, 2].map((i) => (
+          <mesh key={i} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+            <ringGeometry args={[0.08, 0.12, 32]} />
+            <meshBasicMaterial color="#f97316" transparent opacity={0.5} depthWrite={false} blending={THREE.AdditiveBlending} />
+          </mesh>
+        ))}
+      </group>
+
+      <group ref={shakeRef}>
+        {[...Array(4)].map((_, i) => (
+          <mesh key={`c-${i}`} rotation={[-Math.PI / 2, 0, (i * Math.PI) / 2 + 0.4]} position={[0, 0.012, 0]}>
+            <planeGeometry args={[0.6, 0.04]} />
+            <meshBasicMaterial color="#1c1917" transparent opacity={0.8} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
+
+function CollapseEffect({ p }: { p: THREE.Vector3 }) {
+  const debrisData = useMemo(() => {
+    return Array.from({ length: 8 }).map(() => ({
+      basePos: [(Math.random() - 0.5) * 0.5, 0.05, (Math.random() - 0.5) * 0.5] as [number, number, number],
+      offset: Math.random() * Math.PI * 2,
+      speed: 0.1 + Math.random() * 0.2,
+    }));
+  }, []);
+
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+    const t = clock.elapsedTime;
+    groupRef.current.children.forEach((child, i) => {
+      const d = debrisData[i];
+      // Very slow vertical bobbing and rotation
+      child.position.y = d.basePos[1] + Math.sin(t * d.speed + d.offset) * 0.03;
+      child.rotation.x = t * (d.speed * 0.5) + d.offset;
+      child.rotation.y = t * (d.speed * 0.3);
+    });
+  });
+
+  return (
+    <group position={[p.x, p.y, p.z]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+         <circleGeometry args={[0.4, 8]} />
+         <meshBasicMaterial color="#292524" transparent opacity={0.6} depthWrite={false} />
+      </mesh>
+      <group ref={groupRef}>
+        {debrisData.map((d, i) => (
+          <mesh key={i} position={d.basePos}>
+            <boxGeometry args={[0.12, 0.12, 0.12]} />
+            <meshStandardMaterial color="#57534e" roughness={0.9} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
+
+function SurvivorEffect({ p }: { p: THREE.Vector3 }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (ref.current) {
+      ref.current.position.y = 0.3 + Math.sin(clock.elapsedTime * 4) * 0.05;
+      ref.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 6) * 0.1);
+    }
+  });
+  return (
+    <group position={[p.x, p.y, p.z]}>
+       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+         <circleGeometry args={[0.2, 16]} />
+         <meshBasicMaterial color="#22d3ee" transparent opacity={0.4} depthWrite={false} blending={THREE.AdditiveBlending} />
+       </mesh>
+       <group ref={ref}>
+         <Html center style={{ pointerEvents: 'none' }}>
+           <div style={{ fontSize: '28px', color: '#22d3ee', fontWeight: 'bold', textShadow: '0 0 10px #06b6d4' }}>?</div>
+         </Html>
+       </group>
+    </group>
+  );
+}
+
+function ReportedEventEffect({ ev }: { ev: { id: string; eventId: string; x: number; y: number } }) {
+  const p = mapToWorldVec(ev.x + 0.5, ev.y + 0.5, SLAB_H);
+  switch (ev.eventId) {
+    case "smoke": return <SmokeEffect p={p} />;
+    case "flood": return <FloodEffect p={p} />;
+    case "biohazard": return <BiohazardEffect p={p} />;
+    case "earthquake": return <EarthquakeEffect p={p} />;
+    case "collapse": return <CollapseEffect p={p} />;
+    case "survivor": return <SurvivorEffect p={p} />;
+    case "fire":
+    default: return <FireEffect p={p} />;
+  }
+}
+
 // ─── main R3F scene ───────────────────────────────────────────────────────────
 const IsoScene = forwardRef<
   TacticalIsoControls,
@@ -944,7 +1230,7 @@ const IsoScene = forwardRef<
   const {
     gridSize, drones, survivors,
     chargingStations, supplyDepots,
-    simHeat, pulse,
+    simHeat, pulse, activeEvents,
     onSelectItem, onDeselect, onAzimuthRad,
   } = props;
 
@@ -1051,6 +1337,10 @@ const IsoScene = forwardRef<
           <SectorLandmark    sector={s} />
           <SectorLabel       sector={s} />
         </group>
+      ))}
+
+      {activeEvents?.map((ev) => (
+        <ReportedEventEffect key={ev.id} ev={ev} />
       ))}
 
       {cells.map(({ x: ix, y: iy }) => {

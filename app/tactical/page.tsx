@@ -183,6 +183,7 @@ export default function TacticalPage() {
 	const [eventModalOpen, setEventModalOpen] = useState(false);
   const [pendingEvent, setPendingEvent] = useState<typeof INCIDENT_EVENTS[0] | null>(null);
   const [eventCoords, setEventCoords] = useState<{ x: string, y: string }>({ x: "", y: "" });
+  const [activeEvents, setActiveEvents] = useState<{ id: string; eventId: string; x: number; y: number }[]>([]);
 
   const handleEventAction = (eventId: string) => {
      const ev = INCIDENT_EVENTS.find(e => e.id === eventId);
@@ -205,6 +206,10 @@ export default function TacticalPage() {
       const insight = `There is a ${pendingEvent.label.toLowerCase()} at (${parsedX}, ${parsedY})`;
       
       setFeedback(`Reporting: ${insight}`);
+
+      const evId = Math.random().toString(36).substring(7);
+      setActiveEvents(prev => [...prev, { id: evId, eventId: pendingEvent.id, x: parsedX, y: parsedY }]);
+
       try {
           const origin = getBackendOrigin();
           const res = await fetch(`${origin}/mission/${activeMissionId}/override`, {
@@ -273,6 +278,22 @@ export default function TacticalPage() {
     const tick = window.setInterval(() => setPulse((n) => (n + 1) % 2), 900);
     return () => window.clearInterval(tick);
   }, []);
+
+  useEffect(() => {
+    if (drones.length === 0) return;
+    setActiveEvents((prev) => {
+      if (prev.length === 0) return prev;
+      const next = prev.filter((ev) => {
+        const droneAtLoc = drones.some((d) => {
+          const dx = Math.round(Number(d.position?.x ?? -1));
+          const dy = Math.round(Number(d.position?.y ?? -1));
+          return dx === ev.x && dy === ev.y;
+        });
+        return !droneAtLoc;
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [drones]);
 
   const [leftOpen,  setLeftOpen]  = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
@@ -636,6 +657,7 @@ export default function TacticalPage() {
                       onSelectItem={handleIsoPick}
                       onDeselect={handleIsoDeselect}
                       onSwitchToGrid={() => setViewMode("flat")}
+                      activeEvents={activeEvents}
                     />
                   </Grid2DViewport>
                 </div>
