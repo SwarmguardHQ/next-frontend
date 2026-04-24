@@ -28,7 +28,7 @@ function buildMockHeatmap(gridSize: number, survivors: Survivor[]): number[][] {
       Math.max(0, PEAK_HEAT * 0.25 + (Math.random() - 0.5) * 10),
     ),
   );
-  const hotspots = survivors.map(s => [s.position.y, s.position.x] as [number, number]);
+  const hotspots = survivors.map(s => [s.position.x, s.position.y] as [number, number]);
   for (const [hx, hy] of hotspots) {
     for (let y = 0; y < gridSize; y++) {
       for (let x = 0; x < gridSize; x++) {
@@ -79,13 +79,14 @@ export function SensorCanvas({
     if (heatmap) {
       for (let y = 0; y < gridSize; y++) {
         for (let x = 0; x < gridSize; x++) {
+          const flippedY = gridSize - 1 - y; 
           if (!heatmap[y] || heatmap[y][x] == null) continue;
           const v = Math.min(1, heatmap[y][x] / 100);
           if (v > 0.15) {
             const r = Math.round(30 + v * 220);
             const g = Math.round(v * 60);
             ctx.fillStyle = `rgba(${r},${g},0,${v * 0.6})`;
-            ctx.fillRect(x * cw, y * ch, cw, ch);
+            ctx.fillRect(x * cw, flippedY * ch, cw, ch);
           }
         }
       }
@@ -109,8 +110,8 @@ export function SensorCanvas({
     for (const s of survivors) {
       if (!s.detected) continue;
       const { x, y } = s.position;
-      const cx = y * cw + cw / 2;
-      const cy = x * ch + ch / 2;
+      const cx = x * cw + cw / 2;
+      const cy = (gridSize - 1 - y) * ch + ch / 2;
 
       ctx.beginPath();
       ctx.arc(cx, cy, cw * 0.42, 0, Math.PI * 2);
@@ -125,8 +126,8 @@ export function SensorCanvas({
     // Drones
     for (const d of drones) {
       const { x, y } = d.position;
-      const cx = y * cw + cw / 2;
-      const cy = x * ch + ch / 2;
+      const cx = x * cw + cw / 2;
+      const cy = (gridSize - 1 - y) * ch + ch / 2;
       const col = STATUS_COLOR[d.status] ?? "#64748b";
       const r = cw * 0.27;
 
