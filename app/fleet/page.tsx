@@ -89,6 +89,23 @@ export default function DroneFleetPage() {
     const [simVisual, setSimVisual] = useState<WorldStreamSimVisual | null>(null);
     const router = useRouter();
 
+    const [isQwenFallback, setIsQwenFallback] = useState(() => {
+        if (typeof window === "undefined") return false;
+        return window.localStorage.getItem("isQwenFallback") === "true";
+    });
+
+    useEffect(() => {
+        const checkFallback = () => {
+            setIsQwenFallback(localStorage.getItem("isQwenFallback") === "true");
+        };
+        const interval = setInterval(checkFallback, 2000);
+        window.addEventListener("storage", checkFallback);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener("storage", checkFallback);
+        };
+    }, []);
+
     const { droneData, worldStreamLive, apiError } = useWorldStream({
         intervalMs: 500,
         pollingMs: 5000,
@@ -109,10 +126,10 @@ export default function DroneFleetPage() {
                         <p className="text-sm text-cyan-500/70 mt-1">
                             {drones.filter((d) => isFlying(d.status)).length} active · {drones.length} registered units
                             {" · "}
-                            <span className={worldStreamLive ? "text-emerald-400" : "text-amber-400/90"}>
-                                {worldStreamLive ? "WORLD SSE" : apiError ? "offline" : "REST"}
+                            <span className={(worldStreamLive && !isQwenFallback) ? "text-emerald-400" : "text-amber-400/90"}>
+                                {(worldStreamLive && !isQwenFallback) ? "WORLD SSE" : isQwenFallback ? "FALLBACK" : apiError ? "OFFLINE" : "REST"}
                             </span>
-                            {simVisual && worldStreamLive && (
+                            {simVisual && worldStreamLive && !isQwenFallback && (
                                 <>
                                     {" · "}
                                     <span className="text-violet-300/90">

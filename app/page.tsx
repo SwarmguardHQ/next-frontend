@@ -367,11 +367,12 @@ export default function DashboardPage() {
   const backendOrigin = useMemo(() => getBackendOrigin(), []);
   const linkStatus = useMemo(() => {
     if (apiError) return "offline" as const;
+    if (isQwenFallback) return "rest" as const; // Fallback mode uses REST
     if (apiLoading && !droneData) return "connecting" as const;
     if (worldStreamLive) return "live" as const;
     if (droneData) return "rest" as const;
     return "connecting" as const;
-  }, [apiError, apiLoading, droneData, worldStreamLive]);
+  }, [apiError, apiLoading, droneData, worldStreamLive, isQwenFallback]);
 
   if (!mounted) {
     return (
@@ -450,7 +451,7 @@ export default function DashboardPage() {
           )}>
             <div className="flex flex-col leading-none">
               <span className="text-[9px] font-bold uppercase tracking-wider">
-                {isQwenFallback ? "Qwen 3.5" : "Gemini 1.5 Pro"}
+                {isQwenFallback ? "Qwen 3.5" : "Gemini 3.1 Flash"}
               </span>
               {isQwenFallback && (
                 <span className="mt-0.5 text-[8px] font-medium opacity-80">

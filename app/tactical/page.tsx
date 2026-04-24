@@ -361,7 +361,7 @@ export default function TacticalPage() {
     return map;
   }, [survivors, gridSize]);
 
-  const { droneData, survivorData, worldStreamLive, refetch } = useWorldStream({
+  const { droneData, survivorData, worldStreamLive, apiError, refetch } = useWorldStream({
     intervalMs: 500,
     pollingMs: 5000,
     onStreamTick: (p: WorldStreamTickPayload) => {
@@ -435,6 +435,25 @@ export default function TacticalPage() {
   }, []);
 
   const [activeMissionId, setActiveMissionId] = useState<string | null>(null);
+
+  // ── Connection fallback state ──
+  const [isQwenFallback, setIsQwenFallback] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("isQwenFallback") === "true";
+  });
+
+  useEffect(() => {
+    const handleStorage = () => {
+      setIsQwenFallback(window.localStorage.getItem("isQwenFallback") === "true");
+    };
+    window.addEventListener("storage", handleStorage);
+    // Also poll occasionally since storage event only fires for other windows
+    const interval = setInterval(handleStorage, 2000);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Initialize from localStorage and auto-select if needed
   useEffect(() => {
@@ -660,9 +679,9 @@ export default function TacticalPage() {
                 <Stat label="Detected" value={survivors.filter((s) => s.detected && !s.rescued).length} color="text-amber-400" />
                 <Stat label="Rescued" value={survivors.filter((s) => s.rescued).length} color="text-emerald-400" />
                 <Stat label="Critical" value={survivors.filter((s) => s.condition === "critical" && !s.rescued).length} color="text-red-400" />
-                <span className={cn("flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest", worldStreamLive ? "text-emerald-400" : "text-amber-400")}>
-                  <span className={cn("h-1.5 w-1.5 rounded-full", worldStreamLive ? "bg-emerald-400 animate-pulse" : "bg-amber-400")} />
-                  {worldStreamLive ? "Live" : "Fallback"}
+                <span className={cn("flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest", (worldStreamLive && !isQwenFallback) ? "text-emerald-400" : "text-amber-400")}>
+                  <span className={cn("h-1.5 w-1.5 rounded-full", (worldStreamLive && !isQwenFallback) ? "bg-emerald-400 animate-pulse" : "bg-amber-400")} />
+                  {(worldStreamLive && !isQwenFallback) ? "Live" : "Fallback"}
                 </span>
                 </div>
               </div>
@@ -1137,10 +1156,10 @@ export default function TacticalPage() {
               <div className="flex items-center gap-1.5">
                 <span className={cn(
                   "flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest",
-                  worldStreamLive ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40" : "bg-amber-950/60 text-amber-400 border border-amber-800/40"
+                  (worldStreamLive && !isQwenFallback) ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40" : "bg-amber-950/60 text-amber-400 border border-amber-800/40"
                 )}>
-                  <span className={cn("h-1.5 w-1.5 rounded-full", worldStreamLive ? "bg-emerald-400 animate-pulse" : "bg-amber-400")} />
-                  {worldStreamLive ? "Live" : "Fallback"}
+                  <span className={cn("h-1.5 w-1.5 rounded-full", (worldStreamLive && !isQwenFallback) ? "bg-emerald-400 animate-pulse" : "bg-amber-400")} />
+                  {(worldStreamLive && !isQwenFallback) ? "Live" : "Fallback"}
                 </span>
                 <button
                   onClick={() => setLeftOpen(false)}
@@ -1401,6 +1420,15 @@ export default function TacticalPage() {
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className={cn(
+                  "flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest",
+                  (worldStreamLive && !isQwenFallback) ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40" : "bg-amber-950/60 text-amber-400 border border-amber-800/40"
+                )}>
+                  <span className={cn("h-1.5 w-1.5 rounded-full", (worldStreamLive && !isQwenFallback) ? "bg-emerald-400 animate-pulse" : "bg-amber-400")} />
+                  {(worldStreamLive && !isQwenFallback) ? "Live" : "Fallback"}
+                </span>
               </div>
             </div>
 
