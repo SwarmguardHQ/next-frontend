@@ -1383,7 +1383,7 @@ export default function TacticalPage() {
 
             {/* Left panel footer */}
             <div className="mt-auto flex shrink-0 items-center justify-between border-t border-slate-800/50 pt-3 text-[8px] uppercase tracking-widest text-slate-700">
-              <span>© 2025 SIREN Tactical</span>
+              <span>© 2026 SIREN Tactical</span>
               <span className="flex items-center gap-1.5 text-emerald-600">
                 <span className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
                 Link Stable
