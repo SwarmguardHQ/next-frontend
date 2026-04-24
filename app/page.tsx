@@ -451,7 +451,7 @@ export default function DashboardPage() {
           )}>
             <div className="flex flex-col leading-none">
               <span className="text-[9px] font-bold uppercase tracking-wider">
-                {isQwenFallback ? "Qwen 3.5" : "Gemini 3.1 Flash"}
+                {isQwenFallback ? "Qwen 3.5:9b" : "Gemini 3.1 Flash Lite Preview"}
               </span>
               {isQwenFallback && (
                 <span className="mt-0.5 text-[8px] font-medium opacity-80">
