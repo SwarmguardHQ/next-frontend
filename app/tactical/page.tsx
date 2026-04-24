@@ -797,7 +797,6 @@ export default function TacticalPage() {
                                       {sector.id.replace("sector_", "SEC ")}
                                     </span>
                                     <span className="rounded bg-slate-950/80 px-1 py-px text-center text-[7px] font-semibold uppercase tracking-wider text-slate-400">
-                                      {sector.type}
                                     </span>
                                   </div>
                                 </>
@@ -1080,7 +1079,7 @@ export default function TacticalPage() {
                         </span>
                       ),
                       ring: "bg-cyan-500/40",
-                      label: `${s.id} · ${s.type}`,
+                      label: `${s.id}`,
                       desc: `Grid (${s.x}, ${s.y})`,
                     }))} />
 
