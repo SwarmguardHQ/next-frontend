@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   Crosshair,
@@ -39,6 +39,20 @@ export default function Header() {
   const pathname              = usePathname();
   const [mobileOpen,  setMobileOpen]  = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [isQwenFallback, setIsQwenFallback] = useState(false);
+
+  useEffect(() => {
+    const checkFallback = () => {
+      setIsQwenFallback(localStorage.getItem("isQwenFallback") === "true");
+    };
+    checkFallback();
+    const interval = setInterval(checkFallback, 2000);
+    window.addEventListener("storage", checkFallback);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("storage", checkFallback);
+    };
+  }, []);
 
   function isActive(href: string) {
     return pathname === href || (href !== "/" && pathname.startsWith(href));
@@ -85,9 +99,17 @@ export default function Header() {
             </Link>
 
             {/* System live pill */}
-            <span className="hidden shrink-0 items-center gap-1.5 rounded-full border border-emerald-800/50 bg-emerald-950/60 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-emerald-400 sm:inline-flex">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-              System Live
+            <span className={cn(
+              "hidden shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] sm:inline-flex",
+              isQwenFallback 
+                ? "border-amber-800/50 bg-amber-950/60 text-amber-400" 
+                : "border-emerald-800/50 bg-emerald-950/60 text-emerald-400"
+            )}>
+              <span className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                isQwenFallback ? "bg-amber-400" : "bg-emerald-400 animate-pulse"
+              )} />
+              {isQwenFallback ? "System Fallback" : "System Live"}
             </span>
 
             {/* ── Divider ── */}
@@ -303,9 +325,15 @@ export default function Header() {
                 </div>
               </div>
               <div className="mt-3 flex items-center gap-1.5 px-1">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-500">
-                  System Live
+                <span className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  isQwenFallback ? "bg-amber-400" : "bg-emerald-400 animate-pulse"
+                )} />
+                <span className={cn(
+                  "text-[9px] font-bold uppercase tracking-widest",
+                  isQwenFallback ? "text-amber-500" : "text-emerald-500"
+                )}>
+                  {isQwenFallback ? "System Fallback" : "System Live"}
                 </span>
               </div>
             </div>
